@@ -5,9 +5,10 @@
 
 import SwiftUI
 import UIKit
+import Combine
 
 public enum ScannerStep: Int, CaseIterable { case priceTagScan = 1, tenderedScan = 2, coinScan = 3 }
-public enum AppTab: Hashable { case priceTag, history, favorite }
+public enum AppTab: Hashable { case home, priceTag, history, favorite }
 public enum BottomDockMode { case priceTag, cash }
 public enum ManualAmountTarget: Equatable { case price, tendered, coins }
 
@@ -44,7 +45,7 @@ public struct FavoriteItem: Identifiable, Codable {
 }
 
 public final class ScannerViewModel: ObservableObject {
-    @Published public var activeTab: AppTab = .priceTag
+    @Published public var activeTab: AppTab = .home
     @Published public var currentStep: ScannerStep = .priceTagScan
     @Published public var isPriceCardVisible = false
     @Published public var isTenderedCardVisible = false
@@ -52,7 +53,7 @@ public final class ScannerViewModel: ObservableObject {
     @Published public var manualAmountTarget: ManualAmountTarget = .coins
     @Published public var isManualAmountPresented = false
     @Published public var isSettingsPresented = false
-    @Published public var isLargeText = UserDefaults.standard.bool(forKey: "uTopia.largeText")
+    @Published public var textScale: CGFloat = 1
     @Published public var isBoldText = UserDefaults.standard.bool(forKey: "uTopia.boldText")
     @Published public var priceCurrencyCode = UserDefaults.standard.string(forKey: "uTopia.priceCurrency") ?? "JPY"
     @Published public var changeCurrencyCode = UserDefaults.standard.string(forKey: "uTopia.changeCurrency") ?? "THB"
@@ -68,6 +69,7 @@ public final class ScannerViewModel: ObservableObject {
     @Published public var isCartPresented = false
     @Published public var isDuplicateCartItemAlertPresented = false
     @Published public var detectedPrice = 0.0
+    @Published public var detectedProductName = "Scanned item"
     @Published public var tenderedAmount = 0.0
     @Published public var detectedChange = 0.0
     @Published public var keypadInput = "0"
@@ -78,6 +80,11 @@ public final class ScannerViewModel: ObservableObject {
     private var rateRequestID = UUID()
 
     public init() {
+        if let savedScale = UserDefaults.standard.object(forKey: "uTopia.textScale") as? Double {
+            textScale = CGFloat(savedScale)
+        } else if UserDefaults.standard.bool(forKey: "uTopia.largeText") {
+            textScale = 1.2
+        }
         historyItems = Self.load([ScanHistoryItem].self, key: "uTopia.history") ?? []
         favoriteItems = Self.load([FavoriteItem].self, key: "uTopia.favorites") ?? []
         cartItems = Self.load([CartItem].self, key: "uTopia.cart") ?? []
@@ -104,7 +111,7 @@ public final class ScannerViewModel: ObservableObject {
     public var convertedExpectedChange: Double { expectedChange * conversionRate }
     public var currentDifference: Double { detectedChange - expectedChange }
     public var keypadAmount: Double { Double(keypadInput) ?? 0 }
-    public var fontScale: CGFloat { isLargeText ? 1.2 : 1.0 }
+    public var fontScale: CGFloat { textScale }
 
     public func selectCurrencies(price: String, change: String) {
         guard cartItems.isEmpty || price == priceCurrencyCode else { return }
@@ -136,7 +143,10 @@ public final class ScannerViewModel: ObservableObject {
         }
     }
 
-    public func setTextSize(large: Bool) { isLargeText = large; UserDefaults.standard.set(large, forKey: "uTopia.largeText") }
+    public func setTextScale(_ scale: CGFloat) {
+        textScale = min(max(scale, 0.85), 1.45)
+        UserDefaults.standard.set(Double(textScale), forKey: "uTopia.textScale")
+    }
     public func setBoldText(_ bold: Bool) { isBoldText = bold; UserDefaults.standard.set(bold, forKey: "uTopia.boldText") }
 
     public func captureRecognizedAmount(_ amount: Double?, imageData: Data? = nil) {
@@ -145,7 +155,7 @@ public final class ScannerViewModel: ObservableObject {
         withAnimation(.snappy(duration: 0.22)) {
             switch currentStep {
             case .priceTagScan:
-                detectedPrice = amount; isPriceCardVisible = true
+                detectedPrice = amount; detectedProductName = "Scanned item"; isPriceCardVisible = true
                 currentScanImageData = imageData
                 currentFavoriteID = favoriteItems.first(where: { $0.currencyCode == priceCurrencyCode && abs($0.price - amount) < 0.001 })?.id
             case .tenderedScan: tenderedAmount = amount; isTenderedCardVisible = true
@@ -248,6 +258,12 @@ public final class ScannerViewModel: ObservableObject {
         return try? Data(contentsOf: cartImageDirectory().appendingPathComponent(name))
     }
 
+    public func historyImageData(for product: HistoryProduct) -> Data? {
+        guard let name = product.imageFileName else { return nil }
+        return (try? Data(contentsOf: historyImageDirectory().appendingPathComponent(name)))
+            ?? (try? Data(contentsOf: cartImageDirectory().appendingPathComponent(name)))
+    }
+
     private func removeCartItem(at index: Int) {
         deleteCartImage(cartItems[index].imageFileName)
         cartItems.remove(at: index)
@@ -260,6 +276,27 @@ public final class ScannerViewModel: ObservableObject {
             .appendingPathComponent("CartImages", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+
+    private func historyImageDirectory() -> URL {
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("HistoryImages", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private func saveHistoryImage(_ data: Data) -> String? {
+        let name = "\(UUID().uuidString).jpg"
+        do {
+            let imageData = compressedCartImage(data) ?? data
+            try imageData.write(to: historyImageDirectory().appendingPathComponent(name), options: .atomic)
+            return name
+        } catch { return nil }
+    }
+
+    private func deleteHistoryImage(_ name: String?) {
+        guard let name else { return }
+        try? FileManager.default.removeItem(at: historyImageDirectory().appendingPathComponent(name))
     }
 
     private func saveCartImage(_ data: Data) -> String? {
@@ -395,11 +432,23 @@ public final class ScannerViewModel: ObservableObject {
     }
 
     public func completeChangeFlow() {
+        let products: [HistoryProduct]
+        if isCartCheckout {
+            products = cartItems.map {
+                HistoryProduct(name: $0.name, price: $0.unitPrice, currencyCode: $0.currencyCode,
+                               imageFileName: cartImageData(for: $0).flatMap(saveHistoryImage))
+            }
+        } else {
+            let name = detectedProductName.trimmingCharacters(in: .whitespacesAndNewlines)
+            products = [HistoryProduct(name: name.isEmpty ? "Scanned item" : name, price: detectedPrice,
+                                       currencyCode: priceCurrencyCode,
+                                       imageFileName: currentScanImageData.flatMap(saveHistoryImage))]
+        }
         let item = ScanHistoryItem(priceAmount: detectedPrice, convertedPrice: (isLoadingRate || rateUnavailable) ? nil : convertedPrice,
             paidAmount: tenderedAmount, expectedChangeAmount: expectedChange,
             receivedChangeAmount: detectedChange, priceCurrencyCode: priceCurrencyCode,
             changeCurrencyCode: priceCurrencyCode, convertedCurrencyCode: changeCurrencyCode,
-            isVerified: abs(detectedChange - expectedChange) < 0.01)
+            isVerified: abs(detectedChange - expectedChange) < 0.01, products: products)
         historyItems.insert(item, at: 0); persistHistory()
         if let id = currentFavoriteID, let index = favoriteItems.firstIndex(where: { $0.id == id }) {
             favoriteItems[index].tendered = tenderedAmount
@@ -424,8 +473,17 @@ public final class ScannerViewModel: ObservableObject {
         isPriceCardVisible = false; isTenderedCardVisible = false; isCoinCardVisible = false
         currentStep = .priceTagScan; activeTab = .priceTag; scanMessage = nil
     }
-    public func clearAllHistory() { historyItems.removeAll(); persistHistory() }
-    public func deleteHistoryItem(at indexSet: IndexSet) { historyItems.remove(atOffsets: indexSet); persistHistory() }
+    public func clearAllHistory() {
+        historyItems.flatMap(\.products).forEach { deleteHistoryImage($0.imageFileName) }
+        historyItems.removeAll()
+        persistHistory()
+    }
+    public func deleteHistoryItem(at indexSet: IndexSet) {
+        let removed = indexSet.map { historyItems[$0] }
+        historyItems.remove(atOffsets: indexSet)
+        removed.flatMap(\.products).forEach { deleteHistoryImage($0.imageFileName) }
+        persistHistory()
+    }
     public func deleteFavorite(at indexSet: IndexSet) { favoriteItems.remove(atOffsets: indexSet); persistFavorites() }
     public func removeFavorite(_ item: FavoriteItem) { favoriteItems.removeAll { $0.id == item.id }; persistFavorites() }
     private func persistHistory() { Self.save(historyItems, key: "uTopia.history") }
