@@ -106,7 +106,7 @@ private struct HistoryCardRow: View {
             line("Received", amount: item.receivedChangeAmount, currency: item.priceCurrencyCode, scale: scale, bold: true, color: .green)
             if let convertedPrice = item.convertedPrice {
                 Text("≈ \(ExchangeRateService.format(convertedPrice, currencyCode: item.convertedCurrencyCode, decimals: 2))")
-                    .font(.system(size: 13 * scale)).foregroundStyle(.blue)
+                    .font(.system(size: 13 * scale)).foregroundStyle(Color.utopiaBlue)
             }
         }
         .padding(16)

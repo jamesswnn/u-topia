@@ -47,17 +47,15 @@ public struct CurrencyHeaderView: View {
     private func currencyPill(_ title: String, code: String, isDestination: Bool) -> some View {
         HStack(spacing: 5) {
             Text(title).font(.caption.weight(.medium)).foregroundStyle(.secondary)
-            Text(code).font(.system(size: 15, weight: .bold)).foregroundStyle(isDestination ? Color.blue : Color.primary)
+            Text(code).font(.system(size: 15, weight: .bold)).foregroundStyle(isDestination ? Color.utopiaBlue : Color.primary)
             Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
-                .foregroundStyle(isDestination ? Color.blue : Color.primary)
+                .foregroundStyle(isDestination ? Color.utopiaBlue : Color.primary)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background {
-            Capsule()
-                .fill(isDestination ? Color.blue.opacity(0.12) : Color.primary.opacity(0.06))
-                .overlay(Capsule().stroke(isDestination ? Color.blue.opacity(0.5) : Color.primary.opacity(0.25), lineWidth: 1.25))
-        }
+        .background(isDestination ? Color.utopiaBlue.opacity(0.08) : Color.utopiaCard, in: Capsule())
+        .glassEffect(.regular.interactive(), in: Capsule())
+        .overlay(Capsule().stroke(isDestination ? Color.utopiaBlue.opacity(0.35) : Color.utopiaSoftGray.opacity(0.7), lineWidth: 0.75))
         .contentShape(Capsule())
     }
 }
@@ -67,7 +65,7 @@ extension Color {
         self.init(.sRGB, red: Double((hex >> 16) & 0xff) / 255, green: Double((hex >> 8) & 0xff) / 255, blue: Double(hex & 0xff) / 255, opacity: alpha)
     }
 
-    static var appBackground: Color { Color(uiColor: .systemGroupedBackground) }
-    static var appCard: Color { Color(uiColor: .secondarySystemGroupedBackground) }
+    static var appBackground: Color { .utopiaCanvas }
+    static var appCard: Color { .utopiaCard }
     static var appRow: Color { Color(uiColor: .secondarySystemBackground) }
 }

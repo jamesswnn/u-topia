@@ -58,9 +58,9 @@ public struct Screen3_CoinScanView: View {
                 Label("Adjust amount", systemImage: "pencil")
                     .font(.system(size: 16 * viewModel.fontScale, weight: .bold)).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).frame(minHeight: 52)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(Color(hex: 0x1E67ED)))
+                    .padding(.vertical, 8)
             }
-            .buttonStyle(ScaleButtonStyle())
+            .buttonStyle(.glassProminent).tint(Color.utopiaBlue)
             Text("Close to save this transaction to History").font(.system(size: 13 * viewModel.fontScale)).foregroundStyle(.primary)
                 .padding(.horizontal, 12).padding(.vertical, 7).background(.ultraThinMaterial, in: Capsule())
         }

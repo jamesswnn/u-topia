@@ -12,12 +12,12 @@ public struct Screen4_AdjustAmountView: View {
 
     public var body: some View {
         ZStack {
-            Color(uiColor: .systemBackground).ignoresSafeArea()
+            Color.appBackground.ignoresSafeArea()
             VStack(spacing: 0) {
                 HStack {
                     Text("Amount · \(viewModel.priceCurrencyCode)").font(.system(size: 16 * viewModel.fontScale, weight: .semibold)).foregroundStyle(.primary)
                     Spacer()
-                    Button("Cancel") { viewModel.isManualAmountPresented = false }.foregroundStyle(Color(hex: 0x1E67ED))
+                    Button("Cancel") { viewModel.isManualAmountPresented = false }.foregroundStyle(Color.utopiaBlue)
                 }
                 .padding(.horizontal, 24).padding(.top, 16)
                 Spacer()
@@ -45,6 +45,7 @@ public struct Screen4_AdjustAmountView: View {
                                     Text(key).font(.system(size: 28 * viewModel.fontScale, weight: viewModel.isBoldText ? .bold : .regular))
                                         .foregroundStyle(.primary).frame(maxWidth: .infinity).frame(height: 58)
                                 }
+                                .buttonStyle(.glass)
                             }
                         }
                     }
@@ -54,9 +55,9 @@ public struct Screen4_AdjustAmountView: View {
                     Text(viewModel.manualAmountTarget == .coins ? "Save and finish" : "Confirm")
                         .font(.system(size: 17 * viewModel.fontScale, weight: .bold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).frame(height: 54)
-                        .background(RoundedRectangle(cornerRadius: 27).fill(Color(hex: 0x1E67ED)))
+                        .padding(.vertical, 8)
                 }
-                .buttonStyle(ScaleButtonStyle()).padding(.horizontal, 24).padding(.bottom, 20)
+                .buttonStyle(.glassProminent).tint(Color.utopiaBlue).padding(.horizontal, 24).padding(.bottom, 20)
             }
         }
     }
@@ -71,8 +72,7 @@ private struct QuickChipButton: View {
             Text(title).font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(isClear ? Color.red : Color.primary)
                 .padding(.horizontal, 17).padding(.vertical, 9)
-                .background(Capsule().fill(Color(uiColor: .secondarySystemFill)))
         }
-        .buttonStyle(ScaleButtonStyle())
+        .buttonStyle(.glass)
     }
 }

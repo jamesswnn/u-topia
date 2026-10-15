@@ -19,14 +19,13 @@ private struct TravelHeader: View {
             Button(action: onSettings) {
                 Image(systemName: "textformat.size")
                     .font(.system(size: 17, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-                    .frame(width: 42, height: 42).background(.white, in: Circle())
-                    .overlay(Circle().stroke(Color.utopiaSoftGray, lineWidth: 1))
+                    .frame(width: 42, height: 42)
+                    .glassEffect(.regular.interactive(), in: Circle())
             }
             .accessibilityLabel("Text settings")
         }
     }
 }
-
 struct NewTripMenuView: View {
     let onNewTrip: () -> Void
 
@@ -36,8 +35,8 @@ struct NewTripMenuView: View {
             Text("Add to your plans").font(.system(size: 24, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
             Button(action: onNewTrip) {
                 HStack(spacing: 14) {
-                    Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 42, height: 42).background(Color.utopiaCoral, in: Circle())
+                    Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(Color.utopiaBlue)
+                        .frame(width: 42, height: 42).glassEffect(.regular.interactive(), in: Circle())
                     VStack(alignment: .leading, spacing: 3) {
                         Text("New Trip").font(.system(size: 17, weight: .semibold)).foregroundStyle(Color.utopiaInk)
                         Text("Build an itinerary for Bangkok").font(.system(size: 13)).foregroundStyle(.secondary)
@@ -45,13 +44,13 @@ struct NewTripMenuView: View {
                     Spacer()
                     Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.tertiary)
                 }
-                .padding(14).background(.white, in: RoundedRectangle(cornerRadius: 20))
+                .padding(14).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 20))
             }
             .buttonStyle(.plain)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 22).background(Color.utopiaCanvas.ignoresSafeArea())
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
@@ -59,143 +58,370 @@ struct CreateTripView: View {
     @ObservedObject var travelStore: TravelStore
     let onCreated: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var step: TripComposerStep = .where
     @State private var query = ""
-    @State private var days = 3.0
-    @State private var budget = 2.0
-    @State private var selectedPreferences: Set<TripPreference> = [.popular, .foodie]
+    @State private var days = 3
+    @State private var timing: TripTiming = .flexible
+    @State private var selectedDates: Set<DateComponents> = []
+    @State private var budgetPosition = 2.0
+    @State private var selectedPreferences: Set<TripPreference> = []
+    @State private var destinationSelected = false
 
-    private var selectedBudget: TripBudget { TripBudget.allCases[Int(budget)] }
-    private let cityOptions = ["Bangkok, Thailand", "Chiang Mai, Thailand", "Phuket, Thailand", "Tokyo, Japan", "Seoul, South Korea"]
-    private var matchingCities: [String] {
-        query.isEmpty ? [] : cityOptions.filter { $0.localizedCaseInsensitiveContains(query) }
+    private var selectedBudget: TripBudget {
+        TripBudget.allCases[min(max(Int(budgetPosition.rounded()), 0), TripBudget.allCases.count - 1)]
+    }
+    private var selectedDateRange: (start: Date, end: Date)? {
+        let dates = selectedDates.compactMap { Calendar.current.date(from: $0) }.sorted()
+        guard let first = dates.first, let last = dates.last else { return nil }
+        return (first, last)
+    }
+    private var chosenDays: Int {
+        guard timing == .specific, let dates = selectedDateRange else { return days }
+        return max(1, (Calendar.current.dateComponents([.day], from: dates.start, to: dates.end).day ?? 0) + 1)
+    }
+    private var dateLimit: Range<Date> {
+        let start = Calendar.current.startOfDay(for: Date())
+        let end = Calendar.current.date(byAdding: .year, value: 2, to: start) ?? start
+        return start..<end
+    }
+    private let cityOptions: [(name: String, country: String, flag: String)] = [
+        ("Tokyo", "Japan", "🇯🇵"), ("Paris", "France", "🇫🇷"), ("Rome", "Italy", "🇮🇹"),
+        ("Bangkok", "Thailand", "🇹🇭"), ("Chiang Mai", "Thailand", "🇹🇭"),
+        ("Phuket", "Thailand", "🇹🇭"), ("Seoul", "South Korea", "🇰🇷")
+    ]
+    private var matchingCities: [(name: String, country: String, flag: String)] {
+        guard !query.isEmpty else { return cityOptions }
+        return cityOptions.filter { "\($0.name) \($0.country)".localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 25) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Let’s plan somewhere great.").font(.system(size: 27, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
-                    Text("Tell us what you’re looking for and we’ll shape a Bangkok demo itinerary.").font(.system(size: 14)).foregroundStyle(.secondary)
-                }
+        VStack(spacing: 0) {
+            HStack {
+                Color.clear.frame(width: 44, height: 44)
+                Spacer()
+                Text("Create Trip").font(.system(size: 22, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.utopiaInk).frame(width: 42, height: 42)
+                        .glassEffect(.regular.interactive(), in: Circle())
+                }.buttonStyle(ScaleButtonStyle()).accessibilityLabel("Close")
+            }.padding(.horizontal, 20).padding(.top, 10)
 
-                VStack(alignment: .leading, spacing: 11) {
-                    sectionLabel("WHERE", symbol: "magnifyingglass")
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                        TextField("Search city or country", text: $query).textInputAutocapitalization(.words)
-                    }
-                    .padding(14).background(.white, in: RoundedRectangle(cornerRadius: 15))
-                    HStack(spacing: 12) {
-                        Image(systemName: "mappin.and.ellipse").foregroundStyle(Color.utopiaCoral)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Bangkok").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-                            Text("Thailand · Demo destination").font(.system(size: 12)).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.utopiaCoral)
-                    }
-                    .padding(14).background(Color.utopiaCoral.opacity(0.08), in: RoundedRectangle(cornerRadius: 15))
-                    if !matchingCities.isEmpty {
-                        VStack(spacing: 0) {
-                            ForEach(matchingCities, id: \.self) { city in
-                                HStack {
-                                    Text(city).foregroundStyle(city.hasPrefix("Bangkok") ? Color.utopiaInk : .secondary)
-                                    Spacer()
-                                    if city.hasPrefix("Bangkok") { Text("Selected").font(.caption.weight(.semibold)).foregroundStyle(Color.utopiaCoral) }
-                                    else { Image(systemName: "lock.fill").font(.caption).foregroundStyle(.tertiary) }
-                                }
-                                .font(.system(size: 14)).padding(.vertical, 11)
-                                .overlay(alignment: .bottom) { if city != matchingCities.last { Divider() } }
-                            }
-                        }
-                        .padding(.horizontal, 14).background(.white, in: RoundedRectangle(cornerRadius: 15))
-                        Text("More destinations will be available soon.").font(.system(size: 12)).foregroundStyle(.secondary)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 11) {
+                    ForEach(TripComposerStep.allCases, id: \.self) { section in
+                        accordionSection(section)
                     }
                 }
-
-                VStack(alignment: .leading, spacing: 11) {
-                    HStack { sectionLabel("WHEN", symbol: "calendar"); Spacer(); Text("\(Int(days)) days").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.utopiaInk) }
-                    Slider(value: $days, in: 1...14, step: 1).tint(Color.utopiaCoral)
-                    HStack { Text("1 day"); Spacer(); Text("14 days") }.font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 11) {
-                    HStack { sectionLabel("BUDGET", symbol: "bahtsign.circle"); Spacer(); Text(selectedBudget.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.utopiaCoral) }
-                    HStack(spacing: 4) {
-                        ForEach(TripBudget.allCases.indices, id: \.self) { index in
-                            Button { budget = Double(index) } label: {
-                                VStack(spacing: 7) {
-                                    Text(TripBudget.allCases[index].symbol).font(.system(size: 12, weight: .bold))
-                                    Text(["Shoestring", "Budget", "Moderate", "Upscale", "Luxury"][index])
-                                        .font(.system(size: 9, weight: Int(budget) == index ? .bold : .medium)).lineLimit(1).minimumScaleFactor(0.75)
-                                }
-                                .foregroundStyle(Int(budget) == index ? Color.utopiaCoral : Color.secondary)
-                                .frame(maxWidth: .infinity).padding(.vertical, 11)
-                                .background(Int(budget) == index ? Color.utopiaCoral.opacity(0.09) : .white, in: RoundedRectangle(cornerRadius: 12))
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Int(budget) == index ? Color.utopiaCoral.opacity(0.4) : Color.utopiaSoftGray, lineWidth: 1))
-                            }.buttonStyle(.plain)
-                        }
-                    }
-                    Text(selectedBudget.detail).font(.system(size: 12)).foregroundStyle(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    sectionLabel("PREFERENCES", symbol: "slider.horizontal.3")
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 9) {
-                        ForEach(TripPreference.allCases) { preference in
-                            let isSelected = selectedPreferences.contains(preference)
-                            Button {
-                                if isSelected { selectedPreferences.remove(preference) }
-                                else { selectedPreferences.insert(preference) }
-                            } label: {
-                                VStack(spacing: 8) {
-                                    Image(systemName: preference.symbol).font(.system(size: 17, weight: .medium))
-                                    Text(preference.title).font(.system(size: 11, weight: .semibold))
-                                }
-                                .foregroundStyle(isSelected ? Color.utopiaCoral : Color.utopiaInk)
-                                .frame(maxWidth: .infinity).frame(height: 72)
-                                .background(isSelected ? Color.utopiaCoral.opacity(0.09) : .white, in: RoundedRectangle(cornerRadius: 15))
-                                .overlay(RoundedRectangle(cornerRadius: 15).stroke(isSelected ? Color.utopiaCoral.opacity(0.45) : Color.utopiaSoftGray, lineWidth: 1))
-                            }.buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                HStack(spacing: 12) {
-                    Image(systemName: "sparkles").foregroundStyle(Color.utopiaCoral)
-                    Text("Bangkok suggestions are demo recommendations. Personalised AI planning can be connected later.")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                }
-                .padding(14).background(.white, in: RoundedRectangle(cornerRadius: 15))
+                .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 20)
             }
-            .padding(.horizontal, 20).padding(.top, 15).padding(.bottom, 28)
+
+            if step == .preferences {
+                Button(action: createTrip) {
+                    Label("Create trip", systemImage: "sparkles")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(maxWidth: .infinity).frame(height: 52)
+                }
+                .buttonStyle(.glassProminent).tint(Color.utopiaBlue)
+                .disabled(selectedPreferences.isEmpty)
+                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 12)
+                .background(.ultraThinMaterial)
+            }
         }
         .background(Color.utopiaCanvas.ignoresSafeArea())
-        .navigationTitle("New Trip").navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.foregroundStyle(Color.utopiaInk) }
-            ToolbarItem(placement: .confirmationAction) {
-                Button { createTrip() } label: { Image(systemName: "arrow.right").fontWeight(.semibold) }
-                    .tint(Color.utopiaCoral).accessibilityLabel("Create trip")
+        .toolbar(.hidden, for: .navigationBar)
+        .animation(.snappy(duration: 0.25), value: timing)
+    }
+
+    @ViewBuilder
+    private func accordionSection(_ section: TripComposerStep) -> some View {
+        let isOpen = step == section
+        VStack(alignment: .leading, spacing: isOpen ? 15 : 0) {
+            Button {
+                withAnimation(.snappy(duration: 0.28)) { step = section }
+            } label: {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(section.title).font(.system(size: isOpen ? 20 : 15, weight: .bold, design: .rounded))
+                            .foregroundStyle(isOpen ? Color.utopiaInk : Color.secondary)
+                        if !isOpen {
+                            Text(summary(for: section)).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.utopiaBlue)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer()
+                    if !isOpen {
+                        Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(.tertiary)
+                    }
+                }
+                .contentShape(Rectangle())
             }
-            ToolbarItem(placement: .bottomBar) {
-                Button(action: createTrip) {
-                    HStack { Image(systemName: "sparkles"); Text("Create New Trip") }
-                        .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity).padding(.vertical, 15).background(Color.utopiaCoral, in: Capsule())
-                }.buttonStyle(.plain)
+            .buttonStyle(.plain)
+            if isOpen {
+                stepContent.transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .padding(isOpen ? 16 : 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.utopiaSoftGray.opacity(isOpen ? 0.55 : 0.35), lineWidth: 1))
+        .animation(.snappy(duration: 0.25), value: step)
+    }
+
+    private func summary(for section: TripComposerStep) -> String {
+        switch section {
+        case .where: return destinationSelected ? "Bangkok, Thailand" : "Choose destination"
+        case .when:
+            if timing == .specific, let range = selectedDateRange {
+                return "\(range.start.formatted(date: .abbreviated, time: .omitted)) – \(range.end.formatted(date: .abbreviated, time: .omitted))"
+            } else { return "\(days) days · \(timing.title)" }
+        case .budget: return selectedBudget.title
+        case .preferences:
+            let names = TripPreference.allCases.filter { selectedPreferences.contains($0) }.map(\.title)
+            return names.isEmpty ? "Choose interests" : names.joined(separator: " · ")
+        }
+    }
+
+    private func advance(to next: TripComposerStep) {
+        withAnimation(.snappy(duration: 0.28)) { step = next }
+    }
+
+    @ViewBuilder
+    private var stepContent: some View {
+        switch step {
+        case .where:
+            VStack(alignment: .leading, spacing: 15) {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search for a destination", text: $query).textInputAutocapitalization(.words)
+                }
+                .padding(16).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 18))
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Trending", systemImage: "flame.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                    ForEach(matchingCities, id: \.name) { city in
+                        Button {
+                            guard city.name == "Bangkok" else { return }
+                            destinationSelected = true
+                            advance(to: .when)
+                        } label: {
+                        HStack(spacing: 13) {
+                            Text(city.flag).font(.system(size: 28)).frame(width: 48, height: 48)
+                                .background(Color.utopiaCanvas, in: RoundedRectangle(cornerRadius: 14))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(city.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.utopiaInk)
+                                Text(city.country).font(.system(size: 13)).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if destinationSelected && city.name == "Bangkok" {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.utopiaBlue)
+                            } else {
+                                Text("Soon").font(.system(size: 11, weight: .medium)).foregroundStyle(.tertiary)
+                            }
+                        }
+                        .padding(.vertical, 5)
+                        .contentShape(Rectangle())
+                        .overlay(alignment: .bottom) { if city.name != matchingCities.last?.name { Divider().padding(.leading, 62) } }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(city.name != "Bangkok")
+                    }
+                }.padding(16).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 22))
+            }
+
+        case .when:
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 5) {
+                    ForEach(TripTiming.allCases) { option in
+                        Button {
+                            timing = option
+                        } label: {
+                            Text(option.title).font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(timing == option ? Color.utopiaInk : Color.secondary)
+                                .frame(maxWidth: .infinity).padding(.vertical, 14)
+                                .background(timing == option ? Color.utopiaCard : Color.clear, in: Capsule())
+                        }.buttonStyle(ScaleButtonStyle())
+                    }
+                }
+                .padding(5).background(Color.utopiaSoftGray.opacity(0.55), in: Capsule())
+                if timing == .flexible {
+                    VStack(spacing: 5) {
+                        Label("Number of days", systemImage: "calendar")
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(.secondary)
+                        Picker("Number of days", selection: $days) {
+                            ForEach(1...14, id: \.self) { dayCount in
+                                Text("\(dayCount) day\(dayCount == 1 ? "" : "s")").tag(dayCount)
+                            }
+                        }
+                        .pickerStyle(.wheel).frame(height: 190).clipped()
+                        .tint(Color.utopiaBlue)
+                        .onChange(of: days) { _, newDays in
+                            guard step == .when, timing == .flexible else { return }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+                                guard step == .when, timing == .flexible, days == newDays else { return }
+                                advance(to: .budget)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity).padding(.top, 8)
+                } else {
+                    MultiDatePicker("Choose your trip dates", selection: $selectedDates, in: dateLimit)
+                        .tint(Color.utopiaBlue)
+                        .onChange(of: selectedDates) { _, newValue in
+                            if newValue.count > 2 {
+                                let dates = newValue.compactMap { Calendar.current.date(from: $0) }.sorted()
+                                selectedDates = Set([dates.first, dates.last].compactMap { $0 }.map { Calendar.current.dateComponents([.year, .month, .day], from: $0) })
+                            }
+                            if newValue.count == 2 {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                    if step == .when, selectedDateRange != nil { advance(to: .budget) }
+                                }
+                            }
+                        }
+                    if let range = selectedDateRange {
+                        Label("\(range.start.formatted(date: .abbreviated, time: .omitted)) – \(range.end.formatted(date: .abbreviated, time: .omitted)) · \(chosenDays) day\(chosenDays == 1 ? "" : "s")",
+                              systemImage: "checkmark.circle.fill")
+                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
+                    } else {
+                        Text("Select your first and last day.").font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
+                }
+                if timing == .flexible || selectedDateRange != nil {
+                    Button { advance(to: .budget) } label: {
+                        Label("Continue", systemImage: "arrow.right")
+                            .font(.system(size: 14, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
+                    }.buttonStyle(.glassProminent).tint(Color.utopiaBlue)
+                }
+            }
+
+        case .budget:
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack {
+                        Text(selectedBudget.title).font(.system(size: 23, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+                        Spacer()
+                        Text(selectedBudget.symbol).font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.utopiaBlue).padding(.horizontal, 11).padding(.vertical, 7)
+                            .background(Color.utopiaBlue.opacity(0.09), in: Capsule())
+                    }
+                    Text(selectedBudget.detail).font(.system(size: 13)).foregroundStyle(.secondary)
+                }
+                Slider(value: $budgetPosition, in: 0...Double(TripBudget.allCases.count - 1), step: 1) { editing in
+                    if !editing { advance(to: .preferences) }
+                }
+                    .tint(Color.utopiaBlue)
+                    HStack(spacing: 0) {
+                        ForEach(Array(TripBudget.allCases.enumerated()), id: \.element.id) { index, option in
+                            VStack(spacing: 7) {
+                                Circle()
+                                    .fill(index == Int(budgetPosition) ? Color.utopiaBlue : Color.utopiaSoftGray)
+                                    .frame(width: index == Int(budgetPosition) ? 11 : 7, height: index == Int(budgetPosition) ? 11 : 7)
+                                Text(shortBudgetName(option))
+                                    .font(.system(size: 9, weight: index == Int(budgetPosition) ? .bold : .medium))
+                                    .foregroundStyle(index == Int(budgetPosition) ? Color.utopiaBlue : Color.secondary)
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                .padding(19).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 22))
+                .sensoryFeedback(.selection, trigger: selectedBudget)
+                Button { advance(to: .preferences) } label: {
+                    Label("Continue", systemImage: "arrow.right")
+                        .font(.system(size: 14, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
+                }.buttonStyle(.glassProminent).tint(Color.utopiaBlue)
+            }
+
+        case .preferences:
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 11) {
+                ForEach(TripPreference.allCases) { preference in
+                    let isSelected = selectedPreferences.contains(preference)
+                    Button {
+                        if isSelected { selectedPreferences.remove(preference) }
+                        else { selectedPreferences.insert(preference) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(preferenceEmoji(preference)).font(.system(size: 29))
+                                .frame(width: 48, height: 48)
+                                .background(preferenceColor(preference).opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                            Text(preference.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.utopiaInk)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(10).frame(maxWidth: .infinity, minHeight: 72)
+                        .background(isSelected ? preferenceColor(preference).opacity(0.1) : Color.utopiaCard, in: RoundedRectangle(cornerRadius: 18))
+                        .overlay(RoundedRectangle(cornerRadius: 18).stroke(isSelected ? preferenceColor(preference).opacity(0.55) : Color.utopiaSoftGray.opacity(0.6), lineWidth: 1))
+                    }.buttonStyle(ScaleButtonStyle())
+                }
             }
         }
     }
 
-    private func sectionLabel(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol).font(.system(size: 11, weight: .bold)).tracking(0.8).foregroundStyle(Color.utopiaInk)
+    private func shortBudgetName(_ budget: TripBudget) -> String {
+        switch budget {
+        case .ultraBudget: "Shoestring"
+        case .budget: "Budget"
+        case .moderate: "Mid"
+        case .upscale: "Upscale"
+        case .luxury: "Luxury"
+        }
     }
+
+    private func preferenceEmoji(_ preference: TripPreference) -> String {
+        switch preference {
+        case .shopping: "🛍️"
+        case .popular: "📍"
+        case .foodie: "🍜"
+        case .culture: "🏛️"
+        case .nature: "🌿"
+        case .nightlife: "🎉"
+        }
+    }
+
+    private func preferenceColor(_ preference: TripPreference) -> Color {
+        switch preference {
+        case .shopping: Color(hex: 0xE98A63)
+        case .popular: Color(hex: 0x63A4F2)
+        case .foodie: Color(hex: 0xE7A84C)
+        case .culture: Color(hex: 0x9C83D5)
+        case .nature: Color(hex: 0x65A987)
+        case .nightlife: Color(hex: 0xD77BAF)
+        }
+    }
+
     private func createTrip() {
-        travelStore.createBangkokTrip(days: Int(days), budget: selectedBudget,
-                                      preferences: TripPreference.allCases.filter { selectedPreferences.contains($0) })
+        let dates = timing == .specific ? selectedDateRange : nil
+        travelStore.createBangkokTrip(days: chosenDays, budget: selectedBudget,
+                                      preferences: TripPreference.allCases.filter { selectedPreferences.contains($0) },
+                                      startDate: dates?.start, endDate: dates?.end)
         onCreated()
     }
+}
+
+private enum TripComposerStep: Int, CaseIterable {
+    case `where`, when, budget, preferences
+
+    var title: String {
+        switch self {
+        case .where: "Where are you going?"
+        case .when: "When are you going?"
+        case .budget: "What feels right?"
+        case .preferences: "What do you love?"
+        }
+    }
+    var subtitle: String {
+        switch self {
+        case .where: "Choose a city to start your next adventure."
+        case .when: "Pick flexible days or add your exact dates."
+        case .budget: "We’ll tailor the demo plan to your pace."
+        case .preferences: "Pick a few interests for your Bangkok plan."
+        }
+    }
+}
+
+private enum TripTiming: String, CaseIterable, Identifiable {
+    case flexible, specific
+    var id: String { rawValue }
+    var title: String { self == .flexible ? "Flexible" : "Specific Dates" }
 }
 
 struct TripHomeView: View {
@@ -210,124 +436,177 @@ struct TripHomeView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 25) {
-                TravelHeader(eyebrow: "Your location", title: "Bangkok, TH", scale: viewModel.fontScale,
-                             isBoldText: viewModel.isBoldText, onSettings: onSettings)
-                Button(action: onCreateTrip) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 7) {
-                            Text("MAKE IT A TRIP").font(.system(size: 10, weight: .bold)).tracking(1.1).foregroundStyle(.white.opacity(0.8))
-                            Text("Create New Trip").font(.system(size: 21, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                            Text("Build your days around what you love").font(.system(size: 12)).foregroundStyle(.white.opacity(0.9))
-                        }
-                        Spacer()
-                        Image(systemName: "arrow.up.right").font(.system(size: 18, weight: .semibold)).foregroundStyle(Color.utopiaCoral)
-                            .frame(width: 43, height: 43).background(.white, in: Circle())
-                    }
-                    .padding(20).background(LinearGradient(colors: [Color.utopiaCoral, Color(hex: 0xE98A70)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 23))
-                }.buttonStyle(.plain)
+                HStack(alignment: .center) {
+                    Label("Bangkok, Thailand", systemImage: "location.fill")
+                        .font(.system(size: 19 * viewModel.fontScale, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.utopiaInk)
+                    Spacer()
+                    Button(action: onSettings) {
+                        Image(systemName: "textformat.size")
+                            .font(.system(size: 17, weight: .semibold)).foregroundStyle(Color.utopiaInk)
+                            .frame(width: 44, height: 44).glassEffect(.regular.interactive(), in: Circle())
+                    }.buttonStyle(ScaleButtonStyle()).accessibilityLabel("Text settings")
+                }
 
-                if !travelStore.trips.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            sectionTitle("Your trips", subtitle: "Pick up where you left off")
-                            Spacer()
-                            Button("Open plan") {
-                                if let trip = travelStore.currentTrip { activeSheet = .trip(trip) }
-                            }
-                                .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.utopiaCoral)
+                VStack(alignment: .leading, spacing: 13) {
+                    Text("My Trips").font(.system(size: 22 * viewModel.fontScale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+                    if travelStore.trips.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Your next story starts here").font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.utopiaInk)
+                            Text("Create a trip and we’ll keep every day in one lovely plan.").font(.system(size: 12)).foregroundStyle(.secondary)
                         }
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(travelStore.trips) { trip in
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(18)
+                        .background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 22))
+                    } else {
+                        VStack(spacing: 11) {
+                            ForEach(travelStore.trips) { trip in
+                                HStack(spacing: 13) {
                                     Button {
                                         travelStore.selectTrip(trip)
                                         activeSheet = .trip(trip)
-                                    } label: { TripCarouselCard(trip: trip, selected: trip.id == travelStore.selectedTripID) }
-                                        .buttonStyle(.plain)
+                                    } label: {
+                                        TripHomeCard(trip: trip, scale: viewModel.fontScale)
                                     }
-                            }.padding(.vertical, 2)
+                                    .buttonStyle(ScaleButtonStyle())
+                                    Menu {
+                                        Button {
+                                            withAnimation(.snappy(duration: 0.22)) { _ = travelStore.duplicateTrip(trip) }
+                                        } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+                                        Button(role: .destructive) { activeSheet = .delete(trip) } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    } label: {
+                                        Image(systemName: "ellipsis")
+                                            .font(.system(size: 17, weight: .semibold)).foregroundStyle(.secondary)
+                                            .frame(width: 36, height: 48).contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(ScaleButtonStyle())
+                                    .accessibilityLabel("Trip options")
+                                }
+                                .padding(9).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 23))
+                                .overlay(RoundedRectangle(cornerRadius: 23).stroke(Color.utopiaSoftGray.opacity(0.55), lineWidth: 1))
+                            }
                         }
                     }
+                    Button(action: onCreateTrip) {
+                        Label("Create New Trip", systemImage: "plus")
+                            .font(.system(size: 16 * viewModel.fontScale, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color.utopiaBlue).frame(maxWidth: .infinity).frame(height: 70)
+                            .background(Color.utopiaCard.opacity(0.65), in: RoundedRectangle(cornerRadius: 21))
+                            .overlay(RoundedRectangle(cornerRadius: 21).strokeBorder(Color.utopiaBlue.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [7, 7])) )
+                    }.buttonStyle(ScaleButtonStyle())
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    sectionTitle("Recommended in Bangkok", subtitle: "A little inspiration for your first day")
+                    Text("Guides").font(.system(size: 22 * viewModel.fontScale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 13) {
                             ForEach(highlights) { place in
-                                Button { activeSheet = .place(place) } label: { PlaceFeatureCard(place: place) }.buttonStyle(.plain)
+                                Button { activeSheet = .place(place) } label: { PlaceFeatureCard(place: place) }
+                                    .buttonStyle(ScaleButtonStyle())
                             }
                         }.padding(.vertical, 2)
                     }
                 }
-
-                if let trip = travelStore.currentTrip {
-                    VStack(alignment: .leading, spacing: 12) {
-                        sectionTitle("A taste of your plan", subtitle: "A demo itinerary based on your preferences")
-                        Button { activeSheet = .trip(trip) } label: {
-                            HStack(spacing: 14) {
-                                Image(systemName: "sparkles").font(.system(size: 18, weight: .semibold)).foregroundStyle(Color.utopiaCoral)
-                                    .frame(width: 44, height: 44).background(Color.utopiaCoral.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("\(trip.days)-day Bangkok itinerary").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-                                    Text("\(trip.budget.title) · \(trip.preferences.prefix(2).map(\.title).joined(separator: " + "))")
-                                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.tertiary)
-                            }.padding(15).background(.white, in: RoundedRectangle(cornerRadius: 18))
-                        }.buttonStyle(.plain)
-                    }
-                }
             }
-            .padding(.horizontal, 20).padding(.top, 15).padding(.bottom, 28)
+            .padding(.horizontal, 19).padding(.top, 15).padding(.bottom, 32)
         }
         .background(Color.utopiaCanvas.ignoresSafeArea())
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .place(let place): PlaceDetailSheet(place: place)
-            case .trip(let trip): TripDetailSheet(trip: trip).presentationDetents([.large]).presentationDragIndicator(.visible)
+            case .trip(let trip): TripDetailSheet(trip: trip, fontScale: viewModel.fontScale)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible)
+            case .delete(let trip): DeleteTripConfirmationSheet(trip: trip) {
+                    withAnimation(.snappy(duration: 0.25)) { travelStore.deleteTrip(trip) }
+                    activeSheet = nil
+                }
+                .presentationDetents([.height(405)]).presentationDragIndicator(.visible)
+                .presentationCornerRadius(30)
             }
         }
-    }
-
-    private func sectionTitle(_ title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
-            Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
-        }
+        .animation(.snappy(duration: 0.22), value: travelStore.trips)
     }
 }
 
 private enum TripHomeSheet: Identifiable {
     case place(TravelPlace)
     case trip(TravelTrip)
+    case delete(TravelTrip)
     var id: String {
         switch self {
         case .place(let place): "place-\(place.id)"
         case .trip(let trip): "trip-\(trip.id.uuidString)"
+        case .delete(let trip): "delete-\(trip.id.uuidString)"
         }
     }
 }
 
-private struct TripCarouselCard: View {
+private struct TripHomeCard: View {
     let trip: TravelTrip
-    let selected: Bool
+    var scale: CGFloat = 1
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "sun.max.fill").font(.system(size: 13)).foregroundStyle(Color.utopiaCoral)
-                Spacer()
-                if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.utopiaCoral) }
+        HStack(spacing: 13) {
+            TravelImage(url: TravelPlace.bangkokHighlights[0].imageURL, symbol: "building.columns.fill")
+                .frame(width: 91, height: 105).clipShape(RoundedRectangle(cornerRadius: 18))
+            VStack(alignment: .leading, spacing: 9) {
+                Text("\(trip.days) Day\(trip.days == 1 ? "" : "s") in \(trip.city)")
+                    .font(.system(size: 18 * scale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                HStack(spacing: 6) {
+                    Label("\(trip.days)d", systemImage: "calendar")
+                        .padding(.horizontal, 9).padding(.vertical, 6).background(Color.utopiaSoftGray.opacity(0.55), in: Capsule())
+                    Label("\(trip.days * 3) Spots", systemImage: "mappin.and.ellipse")
+                        .foregroundStyle(Color.utopiaBlue).padding(.horizontal, 9).padding(.vertical, 6)
+                        .background(Color.utopiaBlue.opacity(0.08), in: Capsule())
+                }
+                .font(.system(size: 11 * scale, weight: .semibold)).foregroundStyle(.secondary)
+                Text(trip.startDate.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "\(trip.budget.title) · Bangkok, Thailand")
+                    .font(.system(size: 11 * scale)).foregroundStyle(.secondary).lineLimit(1)
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(trip.city).font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
-                Text("\(trip.days) days · \(trip.budget.title)").font(.system(size: 12)).foregroundStyle(.secondary)
-            }
+            Spacer(minLength: 0)
         }
-        .padding(15).frame(width: 175, height: 108, alignment: .leading)
-        .background(.white, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(selected ? Color.utopiaCoral.opacity(0.5) : Color.utopiaSoftGray, lineWidth: 1))
+        .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+    }
+}
+
+private struct DeleteTripConfirmationSheet: View {
+    let trip: TravelTrip
+    let onDelete: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Capsule().fill(Color.utopiaSoftGray).frame(width: 38, height: 5).padding(.top, 11)
+            Text("Remove this trip?").font(.system(size: 25, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+            HStack(spacing: 12) {
+                TravelImage(url: TravelPlace.bangkokHighlights[0].imageURL, symbol: "building.columns.fill")
+                    .frame(width: 82, height: 88).clipShape(RoundedRectangle(cornerRadius: 15))
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("\(trip.days) Days in \(trip.city)").font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+                    Text("\(trip.days) days · \(trip.days * 3) spots").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text("Your saved scan history will remain.").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(10).background(Color.utopiaCanvas, in: RoundedRectangle(cornerRadius: 19))
+            HStack(spacing: 10) {
+                Button("Cancel") { dismiss() }
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.utopiaInk)
+                    .frame(maxWidth: .infinity).frame(height: 52).background(Color.utopiaCard, in: Capsule())
+                    .overlay(Capsule().stroke(Color.utopiaSoftGray, lineWidth: 1)).buttonStyle(ScaleButtonStyle())
+                Button(role: .destructive) {
+                    onDelete()
+                    dismiss()
+                } label: {
+                    Label("Delete", systemImage: "xmark.circle.fill")
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).frame(height: 52).background(Color.red, in: Capsule())
+                }.buttonStyle(ScaleButtonStyle())
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 22).background(Color.utopiaCard.ignoresSafeArea())
     }
 }
 
@@ -345,7 +624,7 @@ private struct PlaceFeatureCard: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 20)).overlay(alignment: .topTrailing) {
             Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.utopiaInk)
-                .frame(width: 30, height: 30).background(.white.opacity(0.93), in: Circle()).padding(11)
+                .frame(width: 30, height: 30).background(Color.utopiaCard.opacity(0.93), in: Circle()).padding(11)
         }
     }
 }
@@ -365,24 +644,24 @@ struct BookingView: View {
                              isBoldText: viewModel.isBoldText, onSettings: onSettings)
                 if let trip = travelStore.currentTrip {
                     HStack(spacing: 10) {
-                        Image(systemName: "suitcase.rolling.fill").foregroundStyle(Color.utopiaCoral)
+                        Image(systemName: "suitcase.rolling.fill").foregroundStyle(Color.utopiaBlue)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("For your Bangkok trip").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.utopiaInk)
                             Text("\(trip.days) nights · Demo booking only").font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer()
-                    }.padding(14).background(.white, in: RoundedRectangle(cornerRadius: 16))
+                    }.padding(14).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 16))
 
                     if let booking = travelStore.currentTripBooking {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("DEMO BOOKING SAVED", systemImage: "checkmark.seal.fill")
-                                .font(.system(size: 10, weight: .bold)).tracking(0.6).foregroundStyle(Color(hex: 0x568F6B))
+                                .font(.system(size: 10, weight: .bold)).tracking(0.6).foregroundStyle(Color.utopiaSuccess)
                             Text(booking.hotelName).font(.system(size: 16, weight: .bold)).foregroundStyle(Color.utopiaInk)
                             Text("\(booking.nights) nights · \(booking.guests) guests · \(ExchangeRateService.format(booking.totalPrice, currencyCode: booking.currencyCode, decimals: 0))")
                                 .font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(hex: 0xEAF4EC), in: RoundedRectangle(cornerRadius: 17))
+                        .background(Color.utopiaSuccessBackground, in: RoundedRectangle(cornerRadius: 17))
                     }
 
                     VStack(alignment: .leading, spacing: 13) {
@@ -398,11 +677,14 @@ struct BookingView: View {
                     }
                 } else {
                     VStack(spacing: 13) {
-                        Image(systemName: "bed.double.fill").font(.system(size: 30)).foregroundStyle(Color.utopiaCoral)
+                        Image(systemName: "bed.double.fill").font(.system(size: 30)).foregroundStyle(Color.utopiaBlue)
                         Text("A stay starts with a trip").font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
                         Text("Create a Bangkok trip first, then save a demo hotel booking to it.").font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        Button("Create New Trip", action: onCreateTrip).buttonStyle(CoralButtonStyle())
-                    }.frame(maxWidth: .infinity).padding(28).background(.white, in: RoundedRectangle(cornerRadius: 22))
+                        Button(action: onCreateTrip) {
+                            Text("Create New Trip").font(.system(size: 14, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
+                        }
+                        .buttonStyle(.glassProminent).tint(Color.utopiaBlue)
+                    }.frame(maxWidth: .infinity).padding(28).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 22))
                 }
                 Text("Demo only · No payment or real reservation will be made.")
                     .font(.system(size: 11)).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 4)
@@ -443,13 +725,13 @@ private struct HotelCard: View {
                         Text(ExchangeRateService.format(hotel.pricePerNight, currencyCode: "THB", decimals: 0)).font(.system(size: 14, weight: .bold)).foregroundStyle(Color.utopiaInk)
                         Text("/ night").font(.system(size: 10)).foregroundStyle(.secondary)
                         Spacer(minLength: 0)
-                        if isCurrent { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color(hex: 0x568F6B)) }
-                        else { Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.utopiaCoral) }
+                        if isCurrent { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.utopiaSuccess) }
+                        else { Image(systemName: "arrow.up.right").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.utopiaBlue) }
                     }
                 }
                 Spacer(minLength: 0)
             }
-            .padding(11).background(.white, in: RoundedRectangle(cornerRadius: 19))
+            .padding(11).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 19))
             .overlay(RoundedRectangle(cornerRadius: 19).stroke(Color.utopiaSoftGray.opacity(0.8), lineWidth: 1))
         }.buttonStyle(.plain)
     }
@@ -479,15 +761,15 @@ private struct HotelBookingSheet: View {
                 }
                 Spacer()
                 HStack(spacing: 14) {
-                    Button { guests = max(1, guests - 1) } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Color.utopiaCoral).font(.system(size: 23)) }
+                    Button { guests = max(1, guests - 1) } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Color.utopiaBlue).font(.system(size: 23)) }
                     Text("\(guests)").font(.system(size: 15, weight: .semibold)).monospacedDigit()
-                    Button { guests = min(8, guests + 1) } label: { Image(systemName: "plus.circle.fill").foregroundStyle(Color.utopiaCoral).font(.system(size: 23)) }
+                    Button { guests = min(8, guests + 1) } label: { Image(systemName: "plus.circle.fill").foregroundStyle(Color.utopiaBlue).font(.system(size: 23)) }
                 }.buttonStyle(.plain)
             }.padding(14).background(Color.utopiaCanvas, in: RoundedRectangle(cornerRadius: 15))
             Button { onConfirm(guests); dismiss() } label: {
-                Text("Save demo booking").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 15).background(Color.utopiaCoral, in: Capsule())
-            }.buttonStyle(.plain)
+                Text("Save demo booking").font(.system(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+            }.buttonStyle(.glassProminent).tint(Color.utopiaBlue)
             Text("This is a local demo only. No hotel is contacted and no payment is taken.")
                 .font(.system(size: 11)).foregroundStyle(.secondary).frame(maxWidth: .infinity).multilineTextAlignment(.center)
         }
@@ -517,7 +799,7 @@ struct RecommendationsView: View {
                 TravelHeader(eyebrow: "Explore around you", title: "Recommend", scale: viewModel.fontScale,
                              isBoldText: viewModel.isBoldText, onSettings: onSettings)
                 HStack(spacing: 7) {
-                    Image(systemName: "location.fill").font(.system(size: 10)).foregroundStyle(Color.utopiaCoral)
+                    Image(systemName: "location.fill").font(.system(size: 10)).foregroundStyle(Color.utopiaBlue)
                     Text("Bangkok, TH · Demo area").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -527,7 +809,7 @@ struct RecommendationsView: View {
                                 Text(filter).font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(selectedFilter == filter ? .white : Color.utopiaInk)
                                     .padding(.horizontal, 15).padding(.vertical, 9)
-                                    .background(selectedFilter == filter ? Color.utopiaInk : .white, in: Capsule())
+                .background(selectedFilter == filter ? Color.utopiaInk : Color.utopiaCard, in: Capsule())
                                     .overlay(Capsule().stroke(selectedFilter == filter ? Color.clear : Color.utopiaSoftGray, lineWidth: 1))
                             }.buttonStyle(.plain)
                         }
@@ -590,7 +872,7 @@ private struct NearbyPlaceRow: View {
                 }.font(.system(size: 9, weight: .medium)).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-        }.padding(10).background(.white, in: RoundedRectangle(cornerRadius: 18))
+        }.padding(10).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 18))
     }
 }
 
@@ -615,7 +897,7 @@ private struct PlaceDetailSheet: View {
                         Text(place.subtitle).font(.system(size: 13)).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Label(place.rating, systemImage: "star.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(hex: 0xD9A63F)).padding(9).background(.white, in: Capsule())
+            Label(place.rating, systemImage: "star.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(hex: 0xD9A63F)).padding(9).background(Color.utopiaCard, in: Capsule())
                 }
                 Text(place.description).font(.system(size: 14)).foregroundStyle(Color.utopiaInk.opacity(0.8)).lineSpacing(3)
                 HStack(spacing: 8) {
@@ -625,7 +907,7 @@ private struct PlaceDetailSheet: View {
                     transportPill("Drive", minutes: place.drivingMinutes, symbol: "car.fill")
                 }
                 Map(position: $cameraPosition) {
-                    Marker(place.name, coordinate: place.coordinate).tint(Color.utopiaCoral)
+                    Marker(place.name, coordinate: place.coordinate).tint(Color.utopiaBlue)
                 }
                 .frame(height: 175).clipShape(RoundedRectangle(cornerRadius: 18))
                 Text("Map and travel times are for the Bangkok demo area.").font(.system(size: 11)).foregroundStyle(.secondary)
@@ -637,15 +919,18 @@ private struct PlaceDetailSheet: View {
 
     private func transportPill(_ title: String, minutes: Int, symbol: String) -> some View {
         VStack(spacing: 5) {
-            Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(Color.utopiaCoral)
+            Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(Color.utopiaBlue)
             Text("\(minutes) min").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.utopiaInk)
             Text(title).font(.system(size: 9)).foregroundStyle(.secondary)
-        }.frame(maxWidth: .infinity).padding(.vertical, 10).background(.white, in: RoundedRectangle(cornerRadius: 13))
+        }.frame(maxWidth: .infinity).padding(.vertical, 10).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 13))
     }
 }
 
 private struct TripDetailSheet: View {
     let trip: TravelTrip
+    var fontScale: CGFloat = 1
+    @State private var selectedDay: Int?
+
     private var itinerary: [TravelPlace] {
         let prefs = Set(trip.preferences)
         let matching = TravelPlace.bangkokHighlights.filter { place in
@@ -654,53 +939,431 @@ private struct TripDetailSheet: View {
             if prefs.contains(.shopping) && place.name.localizedCaseInsensitiveContains("market") { return true }
             return false
         }
-        return matching.isEmpty ? TravelPlace.bangkokHighlights : matching
+        let rest = TravelPlace.bangkokHighlights.filter { place in !matching.contains(where: { $0.id == place.id }) }
+        return matching + rest
     }
+    private var bangkokCenter: TravelPlace { TravelDemoRoute.start }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 19) {
-                    ZStack(alignment: .bottomLeading) {
-                        TravelImage(url: TravelPlace.bangkokHighlights[0].imageURL, symbol: "sparkles").frame(height: 215)
-                        LinearGradient(colors: [.clear, .black.opacity(0.68)], startPoint: .center, endPoint: .bottom)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("YOUR BANGKOK PLAN").font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(.white.opacity(0.8))
-                            Text("\(trip.days) days, your way").font(.system(size: 23, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                        }.padding(17)
-                    }.clipShape(RoundedRectangle(cornerRadius: 22))
-                    HStack(spacing: 8) {
-                        detailTag(trip.budget.title, symbol: "bahtsign.circle")
-                        ForEach(trip.preferences.prefix(2)) { preference in detailTag(preference.title, symbol: preference.symbol) }
-                    }
-                    Text("A demo itinerary").font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
-                    ForEach(1...trip.days, id: \.self) { day in
-                        VStack(alignment: .leading, spacing: 11) {
-                            Text("DAY \(day)").font(.system(size: 10, weight: .bold)).tracking(0.9).foregroundStyle(Color.utopiaCoral)
-                                    ForEach(Array(itinerary.enumerated()), id: \.offset) { index, place in
-                                if index == (day - 1) % itinerary.count {
-                                    HStack(spacing: 11) {
-                                        TravelImage(url: place.imageURL, symbol: place.category.symbol).frame(width: 62, height: 62).clipShape(RoundedRectangle(cornerRadius: 12))
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(["Morning", "Afternoon", "Evening"][index % 3]).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-                                            Text(place.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-                                            Text(place.subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
-                                        }
-                                    }.padding(9).background(.white, in: RoundedRectangle(cornerRadius: 15))
-                                }
+                VStack(alignment: .leading, spacing: 17) {
+                    HStack(spacing: 13) {
+                        TravelImage(url: TravelPlace.bangkokHighlights[0].imageURL, symbol: "building.columns.fill")
+                            .frame(width: 92, height: 112).clipShape(RoundedRectangle(cornerRadius: 19))
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("\(trip.days == 2 ? "Two" : "\(trip.days)") Days in \(trip.city)")
+                                .font(.system(size: 21 * fontScale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+                                .lineLimit(2)
+                            Text("\(trip.days) days · \(trip.days * 3) spots")
+                                .font(.system(size: 13 * fontScale, weight: .medium)).foregroundStyle(.secondary)
+                            Text(tripDateSummary).font(.system(size: 11 * fontScale)).foregroundStyle(Color.utopiaBlue)
+                            HStack(spacing: 6) {
+                                detailTag(trip.budget.title, symbol: "bahtsign.circle")
+                                ForEach(trip.preferences.prefix(1)) { preference in detailTag(preference.title, symbol: preference.symbol) }
                             }
-                        }.padding(14).background(Color.utopiaCanvas, in: RoundedRectangle(cornerRadius: 18))
+                        }
+                        Spacer(minLength: 0)
                     }
-                    Text("Generated from local demo recommendations; no AI service is connected yet.").font(.system(size: 11)).foregroundStyle(.secondary)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            planTab(title: "Overview", day: nil)
+                            ForEach(1...trip.days, id: \.self) { day in planTab(title: "Day \(day)", day: day) }
+                        }.padding(.vertical, 2)
+                    }
+
+                    if let day = selectedDay {
+                        dayPlan(day)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    } else {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Your days").font(.system(size: 19 * fontScale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+                                    Text("Tap a day to see stops and how to get there.").font(.system(size: 12 * fontScale)).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "map.fill").foregroundStyle(Color.utopiaBlue)
+                                    .frame(width: 42, height: 42).background(Color.utopiaBlue.opacity(0.09), in: Circle())
+                            }
+                            ForEach(1...trip.days, id: \.self) { day in
+                                Button { selectedDay = day } label: {
+                                    DayOverviewCard(day: day, places: places(for: day), date: date(for: day), scale: fontScale)
+                                }.buttonStyle(ScaleButtonStyle())
+                            }
+                        }
+                    }
+                    Text("Times and distances are demo estimates. Apple Maps provides live route guidance.")
+                        .font(.system(size: 11 * fontScale)).foregroundStyle(.secondary)
                 }.padding(18)
             }
             .background(Color.utopiaCanvas.ignoresSafeArea())
-            .navigationTitle("Trip itinerary").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { ShareLink(item: "\(trip.days)-day Bangkok trip · \(trip.budget.title)") } }
+            .navigationTitle("My Trip").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareLink(item: "\(trip.days)-day Bangkok trip · \(trip.budget.title)")
+                        .tint(Color.utopiaBlue)
+                }
+            }
+            .animation(.snappy(duration: 0.24), value: selectedDay)
         }
     }
+
+    private var tripDateSummary: String {
+        guard let start = trip.startDate else { return "Bangkok, Thailand" }
+        if let end = trip.endDate, end != start {
+            return "\(start.formatted(date: .abbreviated, time: .omitted)) – \(end.formatted(date: .abbreviated, time: .omitted))"
+        }
+        return start.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private func date(for day: Int) -> Date? {
+        guard let start = trip.startDate else { return nil }
+        return Calendar.current.date(byAdding: .day, value: day - 1, to: start)
+    }
+
+    private func places(for day: Int) -> [TravelPlace] {
+        guard !itinerary.isEmpty else { return [] }
+        return (0..<3).map { offset in itinerary[((day - 1) * 3 + offset) % itinerary.count] }
+    }
+
+    @ViewBuilder
+    private func planTab(title: String, day: Int?) -> some View {
+        let isSelected = selectedDay == day
+        Button { selectedDay = day } label: {
+            HStack(spacing: 7) {
+                if day == nil { Image(systemName: "map").font(.system(size: 13, weight: .semibold)) }
+                Text(title).font(.system(size: 13 * fontScale, weight: .semibold))
+            }
+            .foregroundStyle(isSelected ? Color.white : Color.secondary)
+            .padding(.horizontal, 16).frame(height: 43)
+            .background(isSelected ? Color.utopiaInk : Color.utopiaSoftGray.opacity(0.55), in: Capsule())
+        }.buttonStyle(ScaleButtonStyle())
+    }
+
+    @ViewBuilder
+    private func dayPlan(_ day: Int) -> some View {
+        let stops = places(for: day)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Day \(day) in Bangkok").font(.system(size: 19 * fontScale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+                    Text(date(for: day)?.formatted(date: .complete, time: .omitted) ?? "A day made for exploring")
+                        .font(.system(size: 12 * fontScale)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Label("3 spots", systemImage: "mappin.and.ellipse").font(.system(size: 11 * fontScale, weight: .semibold))
+                    .foregroundStyle(Color.utopiaBlue).padding(.horizontal, 10).padding(.vertical, 8)
+                    .background(Color.utopiaBlue.opacity(0.09), in: Capsule())
+            }
+            ForEach(Array(stops.enumerated()), id: \.element.id) { index, place in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 10) {
+                        Text(["9:00 AM", "12:30 PM", "4:00 PM"][index])
+                            .font(.system(size: 11 * fontScale, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color.utopiaBlue).padding(.top, 4).frame(width: 63, alignment: .leading)
+                        HStack(spacing: 11) {
+                            TravelImage(url: place.imageURL, symbol: place.category.symbol)
+                                .frame(width: 69, height: 72).clipShape(RoundedRectangle(cornerRadius: 14))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(place.name).font(.system(size: 15 * fontScale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk).lineLimit(1)
+                                Text(place.subtitle).font(.system(size: 11 * fontScale)).foregroundStyle(.secondary).lineLimit(1)
+                                Label(place.category.title, systemImage: place.category.symbol)
+                                    .font(.system(size: 10 * fontScale, weight: .medium)).foregroundStyle(Color.utopiaBlue)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(9).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 19))
+                        .overlay(RoundedRectangle(cornerRadius: 19).stroke(Color.utopiaSoftGray.opacity(0.55), lineWidth: 1))
+                    }
+                    if index > 0 {
+                        TripRouteLegView(origin: stops[index - 1], destination: place, fontScale: fontScale)
+                            .padding(.leading, 63)
+                    } else {
+                        TripRouteLegView(origin: bangkokCenter, destination: place, fontScale: fontScale)
+                            .padding(.leading, 63)
+                    }
+                }
+            }
+        }
+    }
+
     private func detailTag(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol).font(.system(size: 10, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-            .padding(.horizontal, 10).padding(.vertical, 8).background(.white, in: Capsule())
+        Label(title, systemImage: symbol).font(.system(size: 10 * fontScale, weight: .semibold)).foregroundStyle(Color.utopiaInk)
+            .padding(.horizontal, 9).padding(.vertical, 7).background(Color.utopiaCanvas, in: Capsule())
+    }
+}
+
+private struct DayOverviewCard: View {
+    let day: Int
+    let places: [TravelPlace]
+    let date: Date?
+    var scale: CGFloat = 1
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Day \(day)").font(.system(size: 13 * scale, weight: .bold, design: .rounded))
+                .foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 9)
+                .background(dayTint, in: Capsule())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(dayName).font(.system(size: 15 * scale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk).lineLimit(1)
+                Text(date?.formatted(date: .abbreviated, time: .omitted) ?? "\(places.count) places to explore")
+                    .font(.system(size: 11 * scale)).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            Text("~\(totalDistance, specifier: "%.1f") km · \(places.count) spots")
+                .font(.system(size: 11 * scale, weight: .medium)).foregroundStyle(.secondary)
+        }
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 19))
+        .overlay(RoundedRectangle(cornerRadius: 19).stroke(Color.utopiaSoftGray.opacity(0.6), lineWidth: 1))
+    }
+
+    private var dayName: String {
+        switch day % 3 {
+        case 1: "Temples, river & old town"
+        case 2: "Markets, cafés & local life"
+        default: "A Bangkok day out"
+        }
+    }
+
+    private var dayTint: Color {
+        [Color(hex: 0xD99A32), Color.utopiaBlue, Color(hex: 0xD96D9D), Color(hex: 0x5E9A78), Color(hex: 0x8877C7)][(day - 1) % 5]
+    }
+
+    private var totalDistance: Double {
+        guard let first = places.first else { return 0 }
+        let startDistance = TripTravelMode.walk.distanceKm(from: TravelDemoRoute.start, to: first)
+        return startDistance + zip(places, places.dropFirst()).reduce(0) { $0 + TripTravelMode.walk.distanceKm(from: $1.0, to: $1.1) }
+    }
+}
+
+private enum TravelDemoRoute {
+    static let start = TravelPlace(id: "bangkok-start", name: "Central Bangkok", subtitle: "Trip starting point",
+                                   category: .attraction, latitude: 13.7563, longitude: 100.5018,
+                                   imageURL: "", description: "", rating: "", walkingMinutes: 0,
+                                   drivingMinutes: 0, busMinutes: 0, trainMinutes: 0)
+}
+
+private enum TripTravelMode: String, CaseIterable, Identifiable {
+    case walk, transit, drive
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .walk: "Walk"
+        case .transit: "Bus"
+        case .drive: "Car"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .walk: "figure.walk"
+        case .transit: "bus.fill"
+        case .drive: "car.fill"
+        }
+    }
+    private var routeFactor: Double {
+        switch self {
+        case .walk: 1.28
+        case .transit: 1.42
+        case .drive: 1.36
+        }
+    }
+    private var speedKPH: Double {
+        switch self {
+        case .walk: 4.5
+        case .transit: 17
+        case .drive: 24
+        }
+    }
+    private var fixedMinutes: Int {
+        switch self {
+        case .walk: 0
+        case .transit: 8
+        case .drive: 5
+        }
+    }
+    var tint: Color {
+        switch self {
+        case .walk: Color(hex: 0xE5A52E)
+        case .transit: Color(hex: 0xE875A9)
+        case .drive: Color.utopiaBlue
+        }
+    }
+    var transportType: MKDirectionsTransportType {
+        switch self {
+        case .walk: .walking
+        case .transit: .transit
+        case .drive: .automobile
+        }
+    }
+    func distanceKm(from: TravelPlace, to: TravelPlace) -> Double {
+        let first = CLLocation(latitude: from.latitude, longitude: from.longitude)
+        let second = CLLocation(latitude: to.latitude, longitude: to.longitude)
+        return max(first.distance(from: second) / 1_000 * routeFactor, 0.2)
+    }
+    func minutes(from: TravelPlace, to: TravelPlace) -> Int {
+        max(Int(ceil(distanceKm(from: from, to: to) / speedKPH * 60)) + fixedMinutes, 2)
+    }
+}
+
+private struct TripRouteLegView: View {
+    let origin: TravelPlace
+    let destination: TravelPlace
+    var fontScale: CGFloat = 1
+    @State private var selectedMode: TripTravelMode = .walk
+    @State private var isExpanded = false
+    @State private var isMapPresented = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.snappy(duration: 0.22)) { isExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: selectedMode.symbol).font(.system(size: 12, weight: .bold))
+                        Text("\(selectedMode.title) \(selectedMode.minutes(from: origin, to: destination))m")
+                            .font(.system(size: 12 * fontScale, weight: .bold, design: .rounded)).monospacedDigit()
+                        Text("· \(selectedMode.distanceKm(from: origin, to: destination), specifier: "%.1f")km")
+                            .font(.system(size: 11 * fontScale, weight: .medium, design: .rounded)).monospacedDigit()
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down").font(.system(size: 9, weight: .bold))
+                    }
+                    .foregroundStyle(selectedMode.tint)
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(selectedMode.tint.opacity(0.11), in: Capsule())
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .accessibilityLabel("Show travel options")
+                Button { isMapPresented = true } label: {
+                    Image(systemName: "map.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 36, height: 36).background(Color.utopiaBlue, in: Circle())
+                }.buttonStyle(ScaleButtonStyle()).accessibilityLabel("Show route on the in-app map")
+            }
+            if isExpanded {
+                HStack(spacing: 7) {
+                    ForEach(TripTravelMode.allCases) { mode in
+                        let selected = selectedMode == mode
+                        Button {
+                            withAnimation(.snappy(duration: 0.2)) { selectedMode = mode }
+                        } label: {
+                            VStack(spacing: 4) {
+                                Label(mode.title, systemImage: mode.symbol).font(.system(size: 10 * fontScale, weight: .bold))
+                                Text("\(mode.minutes(from: origin, to: destination))m · \(mode.distanceKm(from: origin, to: destination), specifier: "%.1f")km")
+                                    .font(.system(size: 9 * fontScale, weight: .medium, design: .rounded)).monospacedDigit()
+                            }
+                            .foregroundStyle(mode.tint)
+                            .frame(maxWidth: .infinity).padding(.vertical, 8)
+                            .background(mode.tint.opacity(selected ? 0.16 : 0.08), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(mode.tint.opacity(selected ? 0.45 : 0.15), lineWidth: 1))
+                        }.buttonStyle(ScaleButtonStyle())
+                    }
+                }.transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .sheet(isPresented: $isMapPresented) {
+            TripRouteMapSheet(origin: origin, destination: destination, mode: selectedMode)
+                .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }
+    }
+}
+
+private struct TripRouteMapSheet: View {
+    let origin: TravelPlace
+    let destination: TravelPlace
+    let mode: TripTravelMode
+    @Environment(\.dismiss) private var dismiss
+    @State private var cameraPosition: MapCameraPosition
+    @State private var route: MKRoute?
+    @State private var liveMinutes: Int?
+    @State private var liveDistanceKm: Double?
+    @State private var isLoading = true
+    @State private var routeUnavailable = false
+
+    init(origin: TravelPlace, destination: TravelPlace, mode: TripTravelMode) {
+        self.origin = origin
+        self.destination = destination
+        self.mode = mode
+        _cameraPosition = State(initialValue: .region(MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: (origin.latitude + destination.latitude) / 2,
+                                          longitude: (origin.longitude + destination.longitude) / 2),
+            span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04))))
+    }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Map(position: $cameraPosition) {
+                Marker(origin.name, coordinate: origin.coordinate).tint(.orange)
+                Marker(destination.name, coordinate: destination.coordinate).tint(.blue)
+                if let route {
+                    MapPolyline(route.polyline).stroke(mode.tint, lineWidth: 6)
+                } else {
+                    MapPolyline(coordinates: [origin.coordinate, destination.coordinate], contourStyle: .geodesic)
+                        .stroke(mode.tint.opacity(0.75), style: StrokeStyle(lineWidth: 4, dash: [8, 6]))
+                }
+            }
+            .mapStyle(.standard(elevation: .realistic))
+            .mapControls { MapCompass(); MapScaleView() }
+            .ignoresSafeArea(edges: .top)
+
+            Button { dismiss() } label: {
+                Image(systemName: "xmark").font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.utopiaInk).padding(11).background(.regularMaterial, in: Circle())
+            }
+            .buttonStyle(ScaleButtonStyle()).padding(.top, 16).padding(.trailing, 18)
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(alignment: .leading, spacing: 11) {
+                HStack(spacing: 8) {
+                    Image(systemName: mode.symbol).foregroundStyle(mode.tint)
+                    Text("\(origin.name) → \(destination.name)").font(.system(size: 16, weight: .bold, design: .rounded)).lineLimit(1)
+                }
+                HStack(spacing: 12) {
+                    Label("\(liveMinutes ?? mode.minutes(from: origin, to: destination)) min", systemImage: "clock")
+                    Label("\(liveDistanceKm ?? mode.distanceKm(from: origin, to: destination), specifier: "%.1f") km", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                    if isLoading { ProgressView().controlSize(.small) }
+                }.font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
+                if routeUnavailable {
+                    Text("Showing an approximate route. MapKit could not load directions right now.")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            }
+            .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+            .background(.regularMaterial, in: UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22))
+        }
+        .task { await loadRoute() }
+    }
+
+    @MainActor private func loadRoute() async {
+        let request = MKDirections.Request()
+        request.source = mapItem(for: origin)
+        request.destination = mapItem(for: destination)
+        request.transportType = mode.transportType
+        request.departureDate = Date()
+        do {
+            let directions = MKDirections(request: request)
+            if mode == .transit {
+                let eta = try await directions.calculateETA()
+                liveMinutes = max(Int((eta.expectedTravelTime / 60).rounded()), 1)
+                liveDistanceKm = eta.distance / 1_000
+            } else {
+                let response = try await directions.calculate()
+                if let best = response.routes.first {
+                    route = best
+                    liveMinutes = max(Int((best.expectedTravelTime / 60).rounded()), 1)
+                    liveDistanceKm = best.distance / 1_000
+                } else { routeUnavailable = true }
+            }
+        } catch {
+            routeUnavailable = true
+        }
+        isLoading = false
+    }
+
+    private func mapItem(for place: TravelPlace) -> MKMapItem {
+        let item = MKMapItem(location: CLLocation(latitude: place.latitude, longitude: place.longitude), address: nil)
+        item.name = place.name
+        return item
     }
 }
 
@@ -734,7 +1397,7 @@ struct MoneyDashboardView: View {
                         Spacer()
                         if let trip = travelStore.currentTrip {
                             Text("\(trip.city) · \(trip.days)d").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.88))
-                                .padding(.horizontal, 9).padding(.vertical, 6).background(.white.opacity(0.14), in: Capsule())
+                                .padding(.horizontal, 9).padding(.vertical, 6).background(Color.utopiaCard.opacity(0.14), in: Capsule())
                         }
                     }
                     Text(ExchangeRateService.format(spent, currencyCode: travelStore.currentTrip?.currencyCode ?? "THB", decimals: 0))
@@ -762,14 +1425,14 @@ struct MoneyDashboardView: View {
                 Button(action: onStartScan) {
                     HStack(spacing: 13) {
                         Image(systemName: "viewfinder").font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
-                            .frame(width: 48, height: 48).background(Color.utopiaCoral, in: RoundedRectangle(cornerRadius: 15))
+                            .frame(width: 48, height: 48).background(Color.utopiaBlue, in: RoundedRectangle(cornerRadius: 15))
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Start scanning").font(.system(size: 16, weight: .bold)).foregroundStyle(Color.utopiaInk)
                             Text("Check change and convert currency").font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Image(systemName: "arrow.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.utopiaCoral)
-                    }.padding(14).background(.white, in: RoundedRectangle(cornerRadius: 19))
+                        Image(systemName: "arrow.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
+                    }.padding(14).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 19))
                         .overlay(RoundedRectangle(cornerRadius: 19).stroke(Color.utopiaSoftGray.opacity(0.7), lineWidth: 1))
                 }.buttonStyle(.plain)
 
@@ -781,7 +1444,7 @@ struct MoneyDashboardView: View {
                         }
                         Spacer()
                         if !tripHistory.isEmpty {
-                            Button("More") { isHistoryPresented = true }.font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.utopiaCoral)
+                            Button("More") { isHistoryPresented = true }.font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
                         }
                     }
                     if let latest = tripHistory.first {
@@ -790,12 +1453,12 @@ struct MoneyDashboardView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("No scans saved to this trip yet").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.utopiaInk)
                             Text("Your latest price and change checks will appear here.").font(.system(size: 12)).foregroundStyle(.secondary)
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(.white, in: RoundedRectangle(cornerRadius: 17))
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 17))
                     }
                 }
                 if travelStore.currentTrip == nil {
                     Button("Create New Trip", action: onCreateTrip)
-                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.utopiaCoral)
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
                 }
             }
             .padding(.horizontal, 20).padding(.top, 15).padding(.bottom, 28)
@@ -817,7 +1480,7 @@ private struct LatestHistoryCard: View {
             VStack(alignment: .leading, spacing: 11) {
                 HStack {
                     Label(item.isVerified ? "Change matched" : "Review change", systemImage: item.isVerified ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(item.isVerified ? Color(hex: 0x568F6B) : Color.orange)
+                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(item.isVerified ? Color.utopiaSuccess : Color.orange)
                     Spacer()
                     Text(item.formattedDate).font(.system(size: 10)).foregroundStyle(.secondary)
                 }
@@ -825,7 +1488,7 @@ private struct LatestHistoryCard: View {
                     if let product = item.products.first {
                         HistoryImageThumbnail(data: viewModel.historyImageData(for: product)).frame(width: 47, height: 47).clipShape(RoundedRectangle(cornerRadius: 11))
                     } else {
-                        Image(systemName: "bag").foregroundStyle(Color.utopiaCoral).frame(width: 47, height: 47).background(Color.utopiaCoral.opacity(0.1), in: RoundedRectangle(cornerRadius: 11))
+                        Image(systemName: "bag").foregroundStyle(Color.utopiaBlue).frame(width: 47, height: 47).background(Color.utopiaBlue.opacity(0.1), in: RoundedRectangle(cornerRadius: 11))
                     }
                     VStack(alignment: .leading, spacing: 3) {
                         Text(item.products.first?.name ?? "Scanned purchase").font(.system(size: 14 * viewModel.fontScale, weight: .semibold)).foregroundStyle(Color.utopiaInk).lineLimit(1)
@@ -841,7 +1504,7 @@ private struct LatestHistoryCard: View {
                         }
                     }
                 }
-            }.padding(14).background(.white, in: RoundedRectangle(cornerRadius: 18))
+            }.padding(14).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 18))
         }.buttonStyle(.plain)
     }
 }
@@ -899,14 +1562,13 @@ private struct TravelImage: View {
             if let image = phase.image { image.resizable().scaledToFill() }
             else {
                 ZStack {
-                    LinearGradient(colors: [Color(hex: 0xF4E6D9), Color(hex: 0xD9E8E0)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Image(systemName: symbol).font(.system(size: 26, weight: .light)).foregroundStyle(Color.utopiaCoral.opacity(0.8))
+                    LinearGradient(colors: [Color(hex: 0xEAF3FF), Color(hex: 0xD7E9FA)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    Image(systemName: symbol).font(.system(size: 26, weight: .light)).foregroundStyle(Color.utopiaBlue.opacity(0.8))
                 }
             }
         }.clipped()
     }
 }
-
 private struct HistoryImageThumbnail: View {
     let data: Data?
     var body: some View {
@@ -915,17 +1577,10 @@ private struct HistoryImageThumbnail: View {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 ZStack {
-                    Color.utopiaCoral.opacity(0.11)
-                    Image(systemName: "bag").font(.system(size: 15)).foregroundStyle(Color.utopiaCoral)
+                    Color.utopiaBlue.opacity(0.11)
+                    Image(systemName: "bag").font(.system(size: 15)).foregroundStyle(Color.utopiaBlue)
                 }
             }
         }.clipped()
-    }
-}
-
-private struct CoralButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-            .frame(maxWidth: .infinity).padding(.vertical, 13).background(Color.utopiaCoral.opacity(configuration.isPressed ? 0.82 : 1), in: Capsule())
     }
 }

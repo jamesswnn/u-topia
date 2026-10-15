@@ -57,34 +57,32 @@ public struct Screen1_PriceScanView: View {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("CONVERTED").font(.system(size: 11 * viewModel.fontScale, weight: .bold)).foregroundStyle(.secondary)
-                    if viewModel.isLoadingRate { ProgressView().tint(.blue) }
+                    if viewModel.isLoadingRate { ProgressView().tint(Color.utopiaBlue) }
                     else if viewModel.rateUnavailable { Text("—").font(.system(size: 25 * viewModel.fontScale, weight: .bold)).foregroundStyle(.secondary) }
                     else { Text(ExchangeRateService.format(viewModel.convertedPrice, currencyCode: viewModel.changeCurrencyCode, decimals: 2))
-                        .font(.system(size: 25 * viewModel.fontScale, weight: viewModel.isBoldText ? .heavy : .bold)).foregroundStyle(.blue) }
+                        .font(.system(size: 25 * viewModel.fontScale, weight: viewModel.isBoldText ? .heavy : .bold)).foregroundStyle(Color.utopiaBlue) }
                 }
             }
             TextField("Item name", text: $viewModel.detectedProductName)
                 .font(.system(size: 15 * viewModel.fontScale))
                 .textFieldStyle(.roundedBorder)
                 .accessibilityLabel("Scanned product name")
-            if viewModel.isLoadingRate { ProgressView("Loading exchange rate…").tint(.blue).frame(maxWidth: .infinity, alignment: .leading) }
+            if viewModel.isLoadingRate { ProgressView("Loading exchange rate…").tint(Color.utopiaBlue).frame(maxWidth: .infinity, alignment: .leading) }
             else if viewModel.rateUnavailable { Text("Exchange rate unavailable. Check your internet connection.").font(.footnote).foregroundStyle(.orange).frame(maxWidth: .infinity, alignment: .leading) }
             Button(action: viewModel.requestAddCurrentPriceToCart) {
                 Label("Add to cart", systemImage: "cart.badge.plus")
                     .font(.system(size: 16 * viewModel.fontScale, weight: .bold))
-                    .foregroundStyle(.blue)
-                    .frame(maxWidth: .infinity).frame(minHeight: 46)
-                    .background(RoundedRectangle(cornerRadius: 14).stroke(Color.blue.opacity(0.75), lineWidth: 1.5))
+                    .foregroundStyle(Color.utopiaBlue)
+                    .frame(maxWidth: .infinity).frame(minHeight: 46).padding(.vertical, 6)
             }
-            .buttonStyle(ScaleButtonStyle())
+            .buttonStyle(.glass).tint(Color.utopiaBlue)
             Button(action: viewModel.goToChang) {
                 HStack { Text("Calculate change"); Image(systemName: "arrow.right") }
                     .font(.system(size: 17 * viewModel.fontScale, weight: .bold))
                     .foregroundStyle(.white).frame(maxWidth: .infinity).frame(minHeight: 54)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(Color(hex: 0x1E67ED)))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.75), lineWidth: 2))
+                    .padding(.vertical, 8)
             }
-            .buttonStyle(ScaleButtonStyle())
+            .buttonStyle(.glassProminent).tint(Color.utopiaBlue)
         }
         .padding(18)
         .background(RoundedRectangle(cornerRadius: 24).fill(Color.appCard).overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.primary.opacity(0.12), lineWidth: 1)))

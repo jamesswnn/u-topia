@@ -31,7 +31,7 @@ public struct BottomDockView: View {
             .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(mode == .priceTag ? Color(hex: 0x2264D1) : Color.clear)
+                    .fill(mode == .priceTag ? Color.utopiaBlue : Color.clear)
             )
             
             // Central Camera Shutter Button
@@ -60,7 +60,7 @@ public struct BottomDockView: View {
             .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(mode == .cash ? Color(hex: 0x2264D1) : Color.clear)
+                    .fill(mode == .cash ? Color.utopiaBlue : Color.clear)
             )
         }
         .padding(.horizontal, 16)

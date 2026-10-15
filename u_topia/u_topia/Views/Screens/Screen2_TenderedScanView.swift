@@ -38,7 +38,7 @@ public struct Screen2_TenderedScanView: View {
             HStack {
                 Spacer()
                 Button { viewModel.openManualAmountEntry(for: .tendered) } label: { Label("Edit", systemImage: "pencil").font(.system(size: 13 * viewModel.fontScale, weight: .semibold)) }
-                    .foregroundStyle(.blue).accessibilityLabel("Edit detected amount paid")
+                    .foregroundStyle(Color.utopiaBlue).accessibilityLabel("Edit detected amount paid")
             }
             valueRow("Price", value: viewModel.detectedPrice, currency: viewModel.priceCurrencyCode, bold: false)
             valueRow("Amount paid", value: viewModel.tenderedAmount, currency: viewModel.priceCurrencyCode, bold: true)
@@ -50,7 +50,7 @@ public struct Screen2_TenderedScanView: View {
                     Text(ExchangeRateService.format(viewModel.expectedChange, currencyCode: viewModel.priceCurrencyCode, decimals: 0))
                         .font(.system(size: 28 * viewModel.fontScale, weight: .heavy)).foregroundStyle(.primary)
                     Text("≈ \(ExchangeRateService.format(viewModel.convertedExpectedChange, currencyCode: viewModel.changeCurrencyCode))")
-                        .font(.system(size: 14 * viewModel.fontScale, weight: .semibold)).foregroundStyle(.blue)
+                        .font(.system(size: 14 * viewModel.fontScale, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
                 }
             }
             Button(action: viewModel.onVerifyChangeTapped) {
@@ -60,10 +60,9 @@ public struct Screen2_TenderedScanView: View {
                 }
                     .font(.system(size: 17 * viewModel.fontScale, weight: .bold)).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).frame(minHeight: 56)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(Color.blue))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.35), lineWidth: 1.5))
+                    .padding(.vertical, 8)
             }
-            .buttonStyle(ScaleButtonStyle())
+            .buttonStyle(.glassProminent).tint(Color.utopiaBlue)
         }
         .padding(20)
         .background(RoundedRectangle(cornerRadius: 24).fill(Color.appCard).overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.primary.opacity(0.12), lineWidth: 1)).shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 8))
@@ -75,7 +74,7 @@ public struct Screen2_TenderedScanView: View {
             Text(title).font(.system(size: 15 * viewModel.fontScale, weight: .medium)).foregroundStyle(.secondary)
             Spacer()
             Text(ExchangeRateService.format(value, currencyCode: currency, decimals: 0))
-                .font(.system(size: 16 * viewModel.fontScale, weight: bold ? .bold : .semibold)).foregroundStyle(bold ? Color.blue : Color.primary)
+                .font(.system(size: 16 * viewModel.fontScale, weight: bold ? .bold : .semibold)).foregroundStyle(bold ? Color.utopiaBlue : Color.primary)
         }
     }
 }

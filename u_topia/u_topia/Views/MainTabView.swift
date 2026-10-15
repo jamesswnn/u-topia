@@ -65,13 +65,13 @@ public struct MainTabView: View {
                 .presentationDetents([.large]).presentationDragIndicator(.visible).presentationCornerRadius(30)
         }
         .alert("Add another item?", isPresented: $viewModel.isDuplicateCartItemAlertPresented) {
-            Button("Keep as separate item") { viewModel.addPendingCartItem() }.tint(.blue)
+            Button("Keep as separate item") { viewModel.addPendingCartItem() }.tint(Color.utopiaBlue)
             Button("Add 1 to existing item") { viewModel.addDuplicateToCartAsAnotherUnit() }
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("A product with this price is already in your cart. Add 1 to its quantity or keep it separate.")
         }
-        .tint(.utopiaCoral)
+        .tint(Color.utopiaBlue)
     }
 
     private var mainTabBar: some View {
@@ -87,19 +87,20 @@ public struct MainTabView: View {
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 54, height: 54)
-                    .background(Color.utopiaCoral, in: Circle())
-                    .shadow(color: Color.utopiaCoral.opacity(0.3), radius: 12, y: 6)
+                    .background(Color.utopiaBlue, in: Circle())
+                    .shadow(color: Color.utopiaBlue.opacity(0.3), radius: 12, y: 6)
                     .frame(maxWidth: .infinity)
             }
+            .buttonStyle(ScaleButtonStyle())
             .accessibilityLabel("New Trip")
             tabButton(.recommend, title: "Recommend", symbol: "map")
             tabButton(.money, title: "Money", symbol: "banknote")
         }
         .padding(.horizontal, 7)
-        .padding(.top, 10)
-        .padding(.bottom, 5)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) { Rectangle().fill(Color.utopiaSoftGray).frame(height: 0.5) }
+        .padding(.vertical, 7)
+        .glassEffect(.regular.interactive(), in: Capsule())
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
     }
 
     private func tabButton(_ section: MainSection, title: String, symbol: String) -> some View {
@@ -108,7 +109,7 @@ public struct MainTabView: View {
                 Image(systemName: symbol).font(.system(size: 18, weight: selectedSection == section ? .semibold : .regular))
                 Text(title).font(.system(size: 10, weight: selectedSection == section ? .semibold : .medium))
             }
-            .foregroundStyle(selectedSection == section ? Color.utopiaCoral : Color.secondary)
+            .foregroundStyle(selectedSection == section ? Color.utopiaBlue : Color.secondary)
             .frame(maxWidth: .infinity).frame(height: 48)
             .contentShape(Rectangle())
         }
@@ -271,17 +272,47 @@ private struct TextSettingsView: View {
     @ObservedObject var viewModel: ScannerViewModel
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Text") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack { Text("Text size"); Spacer(); Text("\(Int(viewModel.textScale * 100))%").foregroundStyle(.secondary).monospacedDigit() }
-                        Slider(value: Binding(get: { Double(viewModel.textScale) }, set: { viewModel.setTextScale(CGFloat($0)) }), in: 0.85...1.45, step: 0.05)
-                        Text("Preview text").font(.system(size: 17 * viewModel.fontScale, weight: viewModel.isBoldText ? .bold : .regular)).frame(maxWidth: .infinity, alignment: .leading)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Make it easy to read")
+                            .font(.system(size: 23, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.utopiaInk)
+                        Text("Adjust text size across your trip and money screens.")
+                            .font(.system(size: 13)).foregroundStyle(.secondary)
                     }
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "textformat.size.smaller").font(.system(size: 15)).foregroundStyle(Color.utopiaBlue)
+                            Slider(value: Binding(get: { Double(viewModel.textScale) }, set: { viewModel.setTextScale(CGFloat($0)) }), in: 0.85...1.45, step: 0.05)
+                                .tint(Color.utopiaBlue)
+                            Image(systemName: "textformat.size.larger").font(.system(size: 20)).foregroundStyle(Color.utopiaBlue)
+                        }
+                        HStack {
+                            Text("Text size").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.utopiaInk)
+                            Spacer()
+                            Text("\(Int(viewModel.textScale * 100))%")
+                                .font(.system(size: 13, weight: .bold, design: .rounded)).monospacedDigit()
+                                .foregroundStyle(Color.utopiaBlue).contentTransition(.numericText())
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(Color.utopiaBlue.opacity(0.09), in: Capsule())
+                        }
+                        Text("Your trip starts here")
+                            .font(.system(size: 17 * viewModel.fontScale, weight: viewModel.isBoldText ? .bold : .regular, design: .rounded))
+                            .foregroundStyle(Color.utopiaInk)
+                            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .background(Color.utopiaCanvas, in: RoundedRectangle(cornerRadius: 15))
+                            .animation(.snappy(duration: 0.2), value: viewModel.textScale)
+                    }
+                    .padding(18).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 22))
                     Toggle("Bold text", isOn: Binding(get: { viewModel.isBoldText }, set: { viewModel.setBoldText($0) }))
+                        .tint(Color.utopiaBlue).padding(16)
+                        .background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 18))
                 }
-                Text("Your choices are saved on this iPad.").font(.footnote).foregroundStyle(.secondary)
+                .padding(20)
             }
+            .background(Color.utopiaCanvas.ignoresSafeArea())
             .navigationTitle("Text settings").navigationBarTitleDisplayMode(.inline)
         }
     }

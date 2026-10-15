@@ -18,7 +18,7 @@ struct CartView: View {
                             CartItemRow(item: item, imageData: viewModel.cartImageData(for: item),
                                         onEdit: { editingItem = item },
                                         onQuantityChange: { delta in viewModel.adjustCartQuantity(for: item, by: delta) })
-                                .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
+                                .listRowBackground(Color.appCard)
                         }
                         .onDelete(perform: viewModel.deleteCartItems)
                     }
@@ -39,16 +39,16 @@ struct CartView: View {
                                 .font(.system(size: 17 * viewModel.fontScale, weight: .bold))
                                 .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity).frame(minHeight: 54)
-                                .background(RoundedRectangle(cornerRadius: 16).fill(Color(hex: 0x1E67ED)))
-                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.55), lineWidth: 1.5))
+                                .padding(.vertical, 10)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.glassProminent)
+                        .tint(Color.utopiaBlue)
                     }
                     .padding(20)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .background(Color.appCard)
                 }
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+            .background(Color.appBackground)
             .navigationTitle("Cart · \(viewModel.cartItems.reduce(0) { $0 + $1.quantity })")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -99,7 +99,7 @@ private struct CartItemRow: View {
                     Text("Each · \(ExchangeRateService.format(item.unitPrice, currencyCode: item.currencyCode, decimals: 2))")
                         .font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
                     Text("Total · \(ExchangeRateService.format(item.lineTotal, currencyCode: item.currencyCode, decimals: 2))")
-                        .font(.system(size: 15, weight: .bold)).foregroundStyle(.blue)
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(Color.utopiaBlue)
                 }
                 Spacer(minLength: 4)
                 Button(action: onEdit) {
@@ -107,18 +107,18 @@ private struct CartItemRow: View {
                         .frame(width: 44, height: 44)
                         .background(Color(uiColor: .tertiarySystemFill), in: Circle())
                 }
-                .buttonStyle(.borderless).tint(.blue).accessibilityLabel("Edit \(item.name)")
+                .buttonStyle(.borderless).tint(Color.utopiaBlue).accessibilityLabel("Edit \(item.name)")
             }
             HStack(spacing: 14) {
                 Text("Quantity").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
                 Spacer()
                 Button { onQuantityChange(-1) } label: { Image(systemName: "minus.circle.fill").font(.system(size: 25)) }
                     .accessibilityLabel("Decrease quantity of \(item.name)")
-                    .buttonStyle(.borderless).foregroundStyle(.blue).frame(width: 44, height: 44).contentShape(Rectangle())
+                    .buttonStyle(.borderless).foregroundStyle(Color.utopiaBlue).frame(width: 44, height: 44).contentShape(Rectangle())
                 Text("\(item.quantity)").font(.system(size: 16, weight: .bold).monospacedDigit()).frame(minWidth: 26)
                 Button { onQuantityChange(1) } label: { Image(systemName: "plus.circle.fill").font(.system(size: 25)) }
                     .accessibilityLabel("Increase quantity of \(item.name)")
-                    .buttonStyle(.borderless).foregroundStyle(.blue).frame(width: 44, height: 44).contentShape(Rectangle())
+                    .buttonStyle(.borderless).foregroundStyle(Color.utopiaBlue).frame(width: 44, height: 44).contentShape(Rectangle())
             }
             .foregroundStyle(.primary)
         }

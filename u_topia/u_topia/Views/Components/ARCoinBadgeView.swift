@@ -18,17 +18,17 @@ public struct ARCoinBadgeView: View {
         ZStack {
             // AR Target Ring
             Circle()
-                .stroke(isPrimary ? Color(hex: 0x3E80E8) : Color.white.opacity(0.8), lineWidth: 1.5)
+                .stroke(isPrimary ? Color.utopiaBlue : Color.white.opacity(0.8), lineWidth: 1.5)
                 .frame(width: 44, height: 44)
             
             // Subtle pulse ring
             Circle()
-                .stroke(isPrimary ? Color(hex: 0x3E80E8).opacity(0.3) : Color.white.opacity(0.2), lineWidth: 1)
+                .stroke(isPrimary ? Color.utopiaBlue.opacity(0.3) : Color.white.opacity(0.2), lineWidth: 1)
                 .frame(width: 54, height: 54)
             
             // Center indicator dot
             Circle()
-                .fill(isPrimary ? Color(hex: 0x3E80E8) : Color.white)
+                .fill(isPrimary ? Color.utopiaBlue : Color.white)
                 .frame(width: 5, height: 5)
             
             // Value pill tag on top right

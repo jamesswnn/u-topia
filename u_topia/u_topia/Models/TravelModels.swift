@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 import SwiftUI
+import UIKit
 
 public enum TripBudget: String, CaseIterable, Codable, Identifiable {
     case ultraBudget, budget, moderate, upscale, luxury
@@ -70,9 +71,12 @@ public struct TravelTrip: Identifiable, Codable, Equatable {
     public let preferences: [TripPreference]
     public let createdAt: Date
     public let currencyCode: String
+    public let startDate: Date?
+    public let endDate: Date?
 
     public init(id: UUID = UUID(), city: String = "Bangkok", countryCode: String = "TH", days: Int,
-                budget: TripBudget, preferences: [TripPreference], createdAt: Date = Date(), currencyCode: String = "THB") {
+                budget: TripBudget, preferences: [TripPreference], createdAt: Date = Date(), currencyCode: String = "THB",
+                startDate: Date? = nil, endDate: Date? = nil) {
         self.id = id
         self.city = city
         self.countryCode = countryCode
@@ -81,6 +85,8 @@ public struct TravelTrip: Identifiable, Codable, Equatable {
         self.preferences = preferences
         self.createdAt = createdAt
         self.currencyCode = currencyCode
+        self.startDate = startDate
+        self.endDate = endDate
     }
 }
 
@@ -209,8 +215,39 @@ public struct DemoHotelBooking: Identifiable, Codable, Equatable {
 }
 
 extension Color {
-    public static let utopiaCoral = Color(hex: 0xF2765B)
-    public static let utopiaInk = Color(hex: 0x20252D)
-    public static let utopiaCanvas = Color(hex: 0xFBFAF8)
-    public static let utopiaSoftGray = Color(hex: 0xE9E7E3)
+    public static let utopiaBlue = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.13, green: 0.43, blue: 0.79, alpha: 1)
+            : UIColor(red: 0.10, green: 0.40, blue: 0.82, alpha: 1)
+    })
+    public static let utopiaInk = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.91, green: 0.95, blue: 1.00, alpha: 1)
+            : UIColor(red: 0.08, green: 0.16, blue: 0.27, alpha: 1)
+    })
+    public static let utopiaCanvas = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.055, green: 0.082, blue: 0.125, alpha: 1)
+            : UIColor(red: 0.955, green: 0.972, blue: 0.997, alpha: 1)
+    })
+    public static let utopiaCard = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.09, green: 0.125, blue: 0.18, alpha: 1)
+            : UIColor.white
+    })
+    public static let utopiaSoftGray = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.20, green: 0.26, blue: 0.35, alpha: 1)
+            : UIColor(red: 0.84, green: 0.89, blue: 0.96, alpha: 1)
+    })
+    public static let utopiaSuccess = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.55, green: 0.82, blue: 0.64, alpha: 1)
+            : UIColor(red: 0.30, green: 0.52, blue: 0.37, alpha: 1)
+    })
+    public static let utopiaSuccessBackground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.10, green: 0.20, blue: 0.14, alpha: 1)
+            : UIColor(red: 0.91, green: 0.96, blue: 0.92, alpha: 1)
+    })
 }

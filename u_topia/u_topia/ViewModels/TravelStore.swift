@@ -6,7 +6,10 @@ public final class TravelStore: ObservableObject {
     @Published public private(set) var trips: [TravelTrip]
     @Published public private(set) var bookings: [DemoHotelBooking]
     @Published public var selectedTripID: UUID? {
-        didSet { Self.save(selectedTripID, key: "uTopia.selectedTrip") }
+        didSet {
+            if let selectedTripID { Self.save(selectedTripID, key: "uTopia.selectedTrip") }
+            else { UserDefaults.standard.removeObject(forKey: "uTopia.selectedTrip") }
+        }
     }
 
     public init() {
@@ -29,12 +32,35 @@ public final class TravelStore: ObservableObject {
     }
 
     @discardableResult
-    public func createBangkokTrip(days: Int, budget: TripBudget, preferences: [TripPreference]) -> TravelTrip {
-        let trip = TravelTrip(days: days, budget: budget, preferences: preferences)
+    public func createBangkokTrip(days: Int, budget: TripBudget, preferences: [TripPreference],
+                                  startDate: Date? = nil, endDate: Date? = nil) -> TravelTrip {
+        let trip = TravelTrip(days: days, budget: budget, preferences: preferences,
+                              startDate: startDate, endDate: endDate)
         trips.insert(trip, at: 0)
         selectedTripID = trip.id
         persistTrips()
         return trip
+    }
+
+    @discardableResult
+    public func duplicateTrip(_ trip: TravelTrip) -> TravelTrip {
+        let copy = TravelTrip(city: trip.city, countryCode: trip.countryCode, days: trip.days,
+                              budget: trip.budget, preferences: trip.preferences,
+                              currencyCode: trip.currencyCode, startDate: trip.startDate, endDate: trip.endDate)
+        trips.insert(copy, at: 0)
+        selectedTripID = copy.id
+        persistTrips()
+        return copy
+    }
+
+    public func deleteTrip(_ trip: TravelTrip) {
+        trips.removeAll { $0.id == trip.id }
+        bookings.removeAll { $0.tripID == trip.id }
+        if selectedTripID == trip.id {
+            selectedTripID = trips.first?.id
+        }
+        persistTrips()
+        Self.save(bookings, key: "uTopia.hotelBookings")
     }
 
     public func selectTrip(_ trip: TravelTrip) {
