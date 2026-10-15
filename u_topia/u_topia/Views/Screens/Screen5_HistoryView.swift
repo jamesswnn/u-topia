@@ -88,6 +88,11 @@ private struct HistoryCardRow: View {
                                 Text(ExchangeRateService.format(product.price, currencyCode: product.currencyCode, decimals: 0))
                                     .font(.system(size: 14 * scale, weight: .medium))
                                     .foregroundStyle(.secondary)
+                                if product.quantity > 1 {
+                                    Text("Quantity: \(product.quantity)")
+                                        .font(.system(size: 13 * scale))
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                             Spacer()
                         }

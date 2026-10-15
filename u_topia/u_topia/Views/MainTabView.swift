@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 public struct MainTabView: View {
     @StateObject private var viewModel = ScannerViewModel()
@@ -14,9 +13,6 @@ public struct MainTabView: View {
 
     public var body: some View {
         TabView(selection: $viewModel.activeTab) {
-            HomeView(viewModel: viewModel)
-                .tabItem { Label("Home", systemImage: "house") }
-                .tag(AppTab.home)
             ScannerFlowContainer(viewModel: viewModel, cameraManager: cameraManager)
                 .tabItem { Label("Scan", systemImage: "camera") }
                 .tag(AppTab.priceTag)
@@ -260,92 +256,6 @@ private struct TextSettingsView: View {
             .navigationTitle("Text settings")
             .navigationBarTitleDisplayMode(.inline)
         }
-    }
-}
-
-private struct HomeView: View {
-    @ObservedObject var viewModel: ScannerViewModel
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Ready to scan?")
-                            .font(.system(size: 28 * viewModel.fontScale, weight: viewModel.isBoldText ? .bold : .semibold))
-                        Text("Scan a price, save items to your cart, and check change.")
-                            .font(.system(size: 16 * viewModel.fontScale))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button {
-                        viewModel.resetScanFlow()
-                    } label: {
-                        Label("Scan a price", systemImage: "camera")
-                            .font(.system(size: 17 * viewModel.fontScale, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity, minHeight: 56)
-                            .background(Color(hex: 0x1E67ED), in: RoundedRectangle(cornerRadius: 18))
-                    }
-
-                    if !viewModel.cartItems.isEmpty {
-                        Button { viewModel.isCartPresented = true } label: {
-                            Label("Cart · \(viewModel.cartItems.reduce(0) { $0 + $1.quantity }) items", systemImage: "cart")
-                                .font(.system(size: 16 * viewModel.fontScale, weight: .semibold))
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                    if !viewModel.historyItems.isEmpty {
-                        HStack {
-                            Text("Recent items")
-                                .font(.system(size: 20 * viewModel.fontScale, weight: .bold))
-                            Spacer()
-                            Button("See all") { viewModel.activeTab = .history }
-                        }
-                        ForEach(Array(viewModel.historyItems.prefix(3))) { entry in
-                            ForEach(entry.products.prefix(1)) { product in
-                                HStack(spacing: 12) {
-                                    HistoryProductThumbnail(data: viewModel.historyImageData(for: product))
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(product.name)
-                                            .font(.system(size: 16 * viewModel.fontScale, weight: .semibold))
-                                        Text(ExchangeRateService.format(product.price, currencyCode: product.currencyCode, decimals: 0))
-                                            .font(.system(size: 15 * viewModel.fontScale, weight: .medium))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                }
-                                .padding(12)
-                                .background(Color.appCard, in: RoundedRectangle(cornerRadius: 16))
-                            }
-                        }
-                    }
-                }
-                .padding(20)
-            }
-            .background(Color.appBackground)
-            .navigationTitle("u-topia")
-        }
-    }
-}
-
-private struct HistoryProductThumbnail: View {
-    let data: Data?
-
-    var body: some View {
-        Group {
-            if let data, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else {
-                Image(systemName: "tag.fill").foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(uiColor: .tertiarySystemFill))
-            }
-        }
-        .frame(width: 48, height: 48)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

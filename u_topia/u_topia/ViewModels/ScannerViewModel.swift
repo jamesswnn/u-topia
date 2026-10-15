@@ -8,7 +8,7 @@ import UIKit
 import Combine
 
 public enum ScannerStep: Int, CaseIterable { case priceTagScan = 1, tenderedScan = 2, coinScan = 3 }
-public enum AppTab: Hashable { case home, priceTag, history, favorite }
+public enum AppTab: Hashable { case priceTag, history, favorite }
 public enum BottomDockMode { case priceTag, cash }
 public enum ManualAmountTarget: Equatable { case price, tendered, coins }
 
@@ -45,7 +45,7 @@ public struct FavoriteItem: Identifiable, Codable {
 }
 
 public final class ScannerViewModel: ObservableObject {
-    @Published public var activeTab: AppTab = .home
+    @Published public var activeTab: AppTab = .priceTag
     @Published public var currentStep: ScannerStep = .priceTagScan
     @Published public var isPriceCardVisible = false
     @Published public var isTenderedCardVisible = false
@@ -435,7 +435,7 @@ public final class ScannerViewModel: ObservableObject {
         let products: [HistoryProduct]
         if isCartCheckout {
             products = cartItems.map {
-                HistoryProduct(name: $0.name, price: $0.unitPrice, currencyCode: $0.currencyCode,
+                HistoryProduct(name: $0.name, price: $0.unitPrice, quantity: $0.quantity, currencyCode: $0.currencyCode,
                                imageFileName: cartImageData(for: $0).flatMap(saveHistoryImage))
             }
         } else {

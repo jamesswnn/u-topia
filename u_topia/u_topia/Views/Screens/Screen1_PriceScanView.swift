@@ -63,6 +63,10 @@ public struct Screen1_PriceScanView: View {
                         .font(.system(size: 25 * viewModel.fontScale, weight: viewModel.isBoldText ? .heavy : .bold)).foregroundStyle(.blue) }
                 }
             }
+            TextField("Item name", text: $viewModel.detectedProductName)
+                .font(.system(size: 15 * viewModel.fontScale))
+                .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Scanned product name")
             if viewModel.isLoadingRate { ProgressView("Loading exchange rate…").tint(.blue).frame(maxWidth: .infinity, alignment: .leading) }
             else if viewModel.rateUnavailable { Text("Exchange rate unavailable. Check your internet connection.").font(.footnote).foregroundStyle(.orange).frame(maxWidth: .infinity, alignment: .leading) }
             Button(action: viewModel.requestAddCurrentPriceToCart) {

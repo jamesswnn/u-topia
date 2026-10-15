@@ -9,13 +9,15 @@ public struct HistoryProduct: Identifiable, Codable {
     public let id: UUID
     public let name: String
     public let price: Double
+    public let quantity: Int
     public let currencyCode: String
     public let imageFileName: String?
 
-    public init(id: UUID = UUID(), name: String, price: Double, currencyCode: String, imageFileName: String? = nil) {
+    public init(id: UUID = UUID(), name: String, price: Double, quantity: Int = 1, currencyCode: String, imageFileName: String? = nil) {
         self.id = id
         self.name = name
         self.price = price
+        self.quantity = quantity
         self.currencyCode = currencyCode
         self.imageFileName = imageFileName
     }
