@@ -9,14 +9,19 @@ private enum MainSection: String, CaseIterable {
     case trip, booking, recommend, money
 }
 
+private enum ScannerModal: String, Identifiable {
+    case manualAmount, cart
+    var id: String { rawValue }
+}
+
 public struct MainTabView: View {
     @StateObject private var viewModel = ScannerViewModel()
     @StateObject private var cameraManager = CameraManager()
     @StateObject private var travelStore = TravelStore()
     @State private var selectedSection: MainSection = .trip
     @State private var isTripSheetPresented = false
-    @State private var startTripComposer = false
     @State private var isScannerPresented = false
+    @State private var scannerModal: ScannerModal?
 
     public init() {}
 
@@ -25,7 +30,7 @@ public struct MainTabView: View {
             switch selectedSection {
             case .trip:
                 TripHomeView(travelStore: travelStore, viewModel: viewModel,
-                             onCreateTrip: openTripComposer, onSettings: showTextSettings)
+                             onCreateTrip: openTripComposer, onOpenBooking: openBooking, onSettings: showTextSettings)
             case .booking:
                 BookingView(travelStore: travelStore, viewModel: viewModel,
                             onCreateTrip: openTripComposer, onSettings: showTextSettings)
@@ -37,32 +42,20 @@ public struct MainTabView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { mainTabBar }
-        .sheet(isPresented: $isTripSheetPresented, onDismiss: { startTripComposer = false }) {
+        .sheet(isPresented: $isTripSheetPresented) {
             NavigationStack {
-                if startTripComposer {
-                    CreateTripView(travelStore: travelStore) {
-                        selectedSection = .trip
-                        isTripSheetPresented = false
-                    }
-                } else {
-                    NewTripMenuView { startTripComposer = true }
+                CreateTripView(travelStore: travelStore) {
+                    selectedSection = .trip
+                    isTripSheetPresented = false
                 }
             }
-            .presentationDetents(startTripComposer ? [.large] : [.height(280), .medium])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(30)
         }
         .fullScreenCover(isPresented: $isScannerPresented) { scannerExperience }
         .sheet(isPresented: $viewModel.isSettingsPresented) {
             TextSettingsView(viewModel: viewModel).presentationDetents([.medium])
-        }
-        .sheet(isPresented: $viewModel.isManualAmountPresented) {
-            Screen4_AdjustAmountView(viewModel: viewModel)
-                .presentationDetents([.large]).presentationDragIndicator(.visible).presentationCornerRadius(30)
-        }
-        .sheet(isPresented: $viewModel.isCartPresented) {
-            CartView(viewModel: viewModel)
-                .presentationDetents([.large]).presentationDragIndicator(.visible).presentationCornerRadius(30)
         }
         .alert("Add another item?", isPresented: $viewModel.isDuplicateCartItemAlertPresented) {
             Button("Keep as separate item") { viewModel.addPendingCartItem() }.tint(Color.utopiaBlue)
@@ -79,9 +72,7 @@ public struct MainTabView: View {
             tabButton(.trip, title: "Trip", symbol: "suitcase.rolling")
             tabButton(.booking, title: "Booking", symbol: "bed.double")
             Button {
-                selectedSection = .trip
-                startTripComposer = false
-                isTripSheetPresented = true
+                openTripComposer()
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 22, weight: .semibold))
@@ -144,6 +135,25 @@ public struct MainTabView: View {
         .onDisappear {
             cameraManager.isLiveGuideTrackingEnabled = false
             cameraManager.stopSession()
+        }
+        .onChange(of: viewModel.isManualAmountPresented) { _, isPresented in
+            if isPresented { scannerModal = .manualAmount }
+        }
+        .onChange(of: viewModel.isCartPresented) { _, isPresented in
+            if isPresented { scannerModal = .cart }
+        }
+        .sheet(item: $scannerModal, onDismiss: {
+            viewModel.isManualAmountPresented = false
+            viewModel.isCartPresented = false
+        }) { modal in
+            switch modal {
+            case .manualAmount:
+                Screen4_AdjustAmountView(viewModel: viewModel)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible).presentationCornerRadius(30)
+            case .cart:
+                CartView(viewModel: viewModel)
+                    .presentationDetents([.large]).presentationDragIndicator(.visible).presentationCornerRadius(30)
+            }
         }
     }
 
@@ -235,8 +245,11 @@ public struct MainTabView: View {
 
     private func openTripComposer() {
         selectedSection = .trip
-        startTripComposer = true
         isTripSheetPresented = true
+    }
+    private func openBooking() {
+        isTripSheetPresented = false
+        selectedSection = .booking
     }
     private func showTextSettings() { viewModel.isSettingsPresented = true }
     private func startScan() {
@@ -297,13 +310,14 @@ private struct TextSettingsView: View {
                                 .padding(.horizontal, 10).padding(.vertical, 6)
                                 .background(Color.utopiaBlue.opacity(0.09), in: Capsule())
                         }
-                        Text("Your trip starts here")
-                            .font(.system(size: 17 * viewModel.fontScale, weight: viewModel.isBoldText ? .bold : .regular, design: .rounded))
-                            .foregroundStyle(Color.utopiaInk)
-                            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .background(Color.utopiaCanvas, in: RoundedRectangle(cornerRadius: 15))
-                            .animation(.snappy(duration: 0.2), value: viewModel.textScale)
+                        if abs(viewModel.textScale - 1) > 0.001 {
+                            HStack {
+                                Spacer()
+                                Button("Reset to 100%") { viewModel.setTextScale(1) }
+                                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
+                                    .buttonStyle(ScaleButtonStyle())
+                            }
+                        }
                     }
                     .padding(18).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 22))
                     Toggle("Bold text", isOn: Binding(get: { viewModel.isBoldText }, set: { viewModel.setBoldText($0) }))

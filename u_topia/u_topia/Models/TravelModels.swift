@@ -16,15 +16,6 @@ public enum TripBudget: String, CaseIterable, Codable, Identifiable {
         case .luxury: "Luxury"
         }
     }
-    public var symbol: String {
-        switch self {
-        case .ultraBudget: "฿"
-        case .budget: "฿฿"
-        case .moderate: "฿฿฿"
-        case .upscale: "฿฿฿฿"
-        case .luxury: "฿฿฿฿฿"
-        }
-    }
     public var detail: String {
         switch self {
         case .ultraBudget: "Spend as little as possible"

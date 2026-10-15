@@ -55,8 +55,8 @@ public final class ScannerViewModel: ObservableObject {
     @Published public var isSettingsPresented = false
     @Published public var textScale: CGFloat = 1
     @Published public var isBoldText = UserDefaults.standard.bool(forKey: "uTopia.boldText")
-    @Published public var priceCurrencyCode = UserDefaults.standard.string(forKey: "uTopia.priceCurrency") ?? "JPY"
-    @Published public var changeCurrencyCode = UserDefaults.standard.string(forKey: "uTopia.changeCurrency") ?? "THB"
+    @Published public var priceCurrencyCode = UserDefaults.standard.string(forKey: "uTopia.priceCurrency") ?? "THB"
+    @Published public var changeCurrencyCode = UserDefaults.standard.string(forKey: "uTopia.changeCurrency") ?? "USD"
     @Published public var conversionRate = 1.0
     @Published public var isLoadingRate = false
     @Published public var rateUnavailable = false
@@ -98,6 +98,15 @@ public final class ScannerViewModel: ObservableObject {
             renamedLegacyItems = true
         }
         if renamedLegacyItems { Self.save(cartItems, key: "uTopia.cart") }
+        if !UserDefaults.standard.bool(forKey: "uTopia.currencyPairV2") {
+            if cartItems.isEmpty {
+                priceCurrencyCode = "THB"
+                changeCurrencyCode = "USD"
+                UserDefaults.standard.set("THB", forKey: "uTopia.priceCurrency")
+                UserDefaults.standard.set("USD", forKey: "uTopia.changeCurrency")
+            }
+            UserDefaults.standard.set(true, forKey: "uTopia.currencyPairV2")
+        }
         if let cartCurrency = cartItems.first?.currencyCode {
             priceCurrencyCode = cartCurrency
             UserDefaults.standard.set(cartCurrency, forKey: "uTopia.priceCurrency")

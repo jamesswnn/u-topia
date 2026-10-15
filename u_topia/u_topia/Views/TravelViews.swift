@@ -3,7 +3,6 @@ import SwiftUI
 import UIKit
 
 private struct TravelHeader: View {
-    let eyebrow: String
     let title: String
     var scale: CGFloat = 1
     var isBoldText = false
@@ -12,7 +11,6 @@ private struct TravelHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(eyebrow.uppercased()).font(.system(size: 10 * scale, weight: .bold, design: .rounded)).tracking(1.1).foregroundStyle(.secondary)
                 Text(title).font(.system(size: 27 * scale, weight: isBoldText ? .black : .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
             }
             Spacer(minLength: 8)
@@ -60,8 +58,6 @@ struct CreateTripView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var step: TripComposerStep = .where
     @State private var query = ""
-    @State private var days = 3
-    @State private var timing: TripTiming = .flexible
     @State private var selectedDates: Set<DateComponents> = []
     @State private var budgetPosition = 2.0
     @State private var selectedPreferences: Set<TripPreference> = []
@@ -76,7 +72,7 @@ struct CreateTripView: View {
         return (first, last)
     }
     private var chosenDays: Int {
-        guard timing == .specific, let dates = selectedDateRange else { return days }
+        guard let dates = selectedDateRange else { return 1 }
         return max(1, (Calendar.current.dateComponents([.day], from: dates.start, to: dates.end).day ?? 0) + 1)
     }
     private var dateLimit: Range<Date> {
@@ -131,7 +127,6 @@ struct CreateTripView: View {
         }
         .background(Color.utopiaCanvas.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .animation(.snappy(duration: 0.25), value: timing)
     }
 
     @ViewBuilder
@@ -173,9 +168,9 @@ struct CreateTripView: View {
         switch section {
         case .where: return destinationSelected ? "Bangkok, Thailand" : "Choose destination"
         case .when:
-            if timing == .specific, let range = selectedDateRange {
+            if let range = selectedDateRange {
                 return "\(range.start.formatted(date: .abbreviated, time: .omitted)) – \(range.end.formatted(date: .abbreviated, time: .omitted))"
-            } else { return "\(days) days · \(timing.title)" }
+            } else { return "Choose travel dates" }
         case .budget: return selectedBudget.title
         case .preferences:
             let names = TripPreference.allCases.filter { selectedPreferences.contains($0) }.map(\.title)
@@ -230,63 +225,29 @@ struct CreateTripView: View {
             }
 
         case .when:
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 5) {
-                    ForEach(TripTiming.allCases) { option in
-                        Button {
-                            timing = option
-                        } label: {
-                            Text(option.title).font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(timing == option ? Color.utopiaInk : Color.secondary)
-                                .frame(maxWidth: .infinity).padding(.vertical, 14)
-                                .background(timing == option ? Color.utopiaCard : Color.clear, in: Capsule())
-                        }.buttonStyle(ScaleButtonStyle())
-                    }
-                }
-                .padding(5).background(Color.utopiaSoftGray.opacity(0.55), in: Capsule())
-                if timing == .flexible {
-                    VStack(spacing: 5) {
-                        Label("Number of days", systemImage: "calendar")
-                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(.secondary)
-                        Picker("Number of days", selection: $days) {
-                            ForEach(1...14, id: \.self) { dayCount in
-                                Text("\(dayCount) day\(dayCount == 1 ? "" : "s")").tag(dayCount)
-                            }
+            VStack(alignment: .leading, spacing: 12) {
+                MultiDatePicker("Choose your trip dates", selection: $selectedDates, in: dateLimit)
+                    .tint(Color.utopiaBlue)
+                    .onChange(of: selectedDates) { _, newValue in
+                        if newValue.count > 2 {
+                            let dates = newValue.compactMap { Calendar.current.date(from: $0) }.sorted()
+                            selectedDates = Set([dates.first, dates.last].compactMap { $0 }.map { Calendar.current.dateComponents([.year, .month, .day], from: $0) })
                         }
-                        .pickerStyle(.wheel).frame(height: 190).clipped()
-                        .tint(Color.utopiaBlue)
-                        .onChange(of: days) { _, newDays in
-                            guard step == .when, timing == .flexible else { return }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
-                                guard step == .when, timing == .flexible, days == newDays else { return }
-                                advance(to: .budget)
+                        if newValue.count == 2 {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                if step == .when, selectedDateRange != nil { advance(to: .budget) }
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity).padding(.top, 8)
+                if let range = selectedDateRange {
+                    Label("\(range.start.formatted(date: .abbreviated, time: .omitted)) – \(range.end.formatted(date: .abbreviated, time: .omitted)) · \(chosenDays) day\(chosenDays == 1 ? "" : "s")",
+                          systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
                 } else {
-                    MultiDatePicker("Choose your trip dates", selection: $selectedDates, in: dateLimit)
-                        .tint(Color.utopiaBlue)
-                        .onChange(of: selectedDates) { _, newValue in
-                            if newValue.count > 2 {
-                                let dates = newValue.compactMap { Calendar.current.date(from: $0) }.sorted()
-                                selectedDates = Set([dates.first, dates.last].compactMap { $0 }.map { Calendar.current.dateComponents([.year, .month, .day], from: $0) })
-                            }
-                            if newValue.count == 2 {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                    if step == .when, selectedDateRange != nil { advance(to: .budget) }
-                                }
-                            }
-                        }
-                    if let range = selectedDateRange {
-                        Label("\(range.start.formatted(date: .abbreviated, time: .omitted)) – \(range.end.formatted(date: .abbreviated, time: .omitted)) · \(chosenDays) day\(chosenDays == 1 ? "" : "s")",
-                              systemImage: "checkmark.circle.fill")
-                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
-                    } else {
-                        Text("Select your first and last day.").font(.system(size: 12)).foregroundStyle(.secondary)
-                    }
+                    Text("Select one date for a day trip, or two dates for an overnight stay.")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
-                if timing == .flexible || selectedDateRange != nil {
+                if selectedDateRange != nil {
                     Button { advance(to: .budget) } label: {
                         Label("Continue", systemImage: "arrow.right")
                             .font(.system(size: 14, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -300,9 +261,6 @@ struct CreateTripView: View {
                     HStack {
                         Text(selectedBudget.title).font(.system(size: 23, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
                         Spacer()
-                        Text(selectedBudget.symbol).font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.utopiaBlue).padding(.horizontal, 11).padding(.vertical, 7)
-                            .background(Color.utopiaBlue.opacity(0.09), in: Capsule())
                     }
                     Text(selectedBudget.detail).font(.system(size: 13)).foregroundStyle(.secondary)
                 }
@@ -389,7 +347,7 @@ struct CreateTripView: View {
     }
 
     private func createTrip() {
-        let dates = timing == .specific ? selectedDateRange : nil
+        let dates = selectedDateRange
         travelStore.createBangkokTrip(days: chosenDays, budget: selectedBudget,
                                       preferences: TripPreference.allCases.filter { selectedPreferences.contains($0) },
                                       startDate: dates?.start, endDate: dates?.end)
@@ -402,32 +360,27 @@ private enum TripComposerStep: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .where: "Where are you going?"
-        case .when: "When are you going?"
+        case .where: "Where"
+        case .when: "When"
         case .budget: "What feels right?"
-        case .preferences: "What do you love?"
+        case .preferences: "Preferences"
         }
     }
     var subtitle: String {
         switch self {
         case .where: "Choose a city to start your next adventure."
-        case .when: "Pick flexible days or add your exact dates."
-        case .budget: "We’ll tailor the demo plan to your pace."
+        case .when: "Choose your travel dates."
+        case .budget: "Choose a pace that feels right for your trip."
         case .preferences: "Pick a few interests for your Bangkok plan."
         }
     }
-}
-
-private enum TripTiming: String, CaseIterable, Identifiable {
-    case flexible, specific
-    var id: String { rawValue }
-    var title: String { self == .flexible ? "Flexible" : "Specific Dates" }
 }
 
 struct TripHomeView: View {
     @ObservedObject var travelStore: TravelStore
     @ObservedObject var viewModel: ScannerViewModel
     let onCreateTrip: () -> Void
+    let onOpenBooking: () -> Void
     let onSettings: () -> Void
     @State private var activeSheet: TripHomeSheet?
 
@@ -515,7 +468,13 @@ struct TripHomeView: View {
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .place(let place): PlaceDetailSheet(place: place)
-            case .trip(let trip): TripDetailSheet(trip: trip, fontScale: viewModel.fontScale)
+            case .trip(let trip): TripDetailSheet(trip: trip,
+                                                  booking: travelStore.bookings.first { $0.tripID == trip.id },
+                                                  fontScale: viewModel.fontScale,
+                                                  onBookHotel: {
+                                                      activeSheet = nil
+                                                      onOpenBooking()
+                                                  })
                     .presentationDetents([.large]).presentationDragIndicator(.visible)
             case .delete(let trip): DeleteTripConfirmationSheet(trip: trip) {
                     withAnimation(.snappy(duration: 0.25)) { travelStore.deleteTrip(trip) }
@@ -640,21 +599,22 @@ struct BookingView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
-                TravelHeader(eyebrow: "Stay somewhere lovely", title: "Booking", scale: viewModel.fontScale,
+                TravelHeader(title: "Booking", scale: viewModel.fontScale,
                              isBoldText: viewModel.isBoldText, onSettings: onSettings)
                 if let trip = travelStore.currentTrip {
                     HStack(spacing: 10) {
                         Image(systemName: "suitcase.rolling.fill").foregroundStyle(Color.utopiaBlue)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("For your Bangkok trip").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-                            Text("\(trip.days) nights · Demo booking only").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text("\(max(trip.days - 1, 0)) night\(trip.days == 2 ? "" : "s") · \(tripDateDescription(trip))")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer()
                     }.padding(14).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 16))
 
                     if let booking = travelStore.currentTripBooking {
                         VStack(alignment: .leading, spacing: 8) {
-                            Label("DEMO BOOKING SAVED", systemImage: "checkmark.seal.fill")
+                            Label("BOOKING SAVED", systemImage: "checkmark.seal.fill")
                                 .font(.system(size: 10, weight: .bold)).tracking(0.6).foregroundStyle(Color.utopiaSuccess)
                             Text(booking.hotelName).font(.system(size: 16, weight: .bold)).foregroundStyle(Color.utopiaInk)
                             Text("\(booking.nights) nights · \(booking.guests) guests · \(ExchangeRateService.format(booking.totalPrice, currencyCode: booking.currencyCode, decimals: 0))")
@@ -667,10 +627,12 @@ struct BookingView: View {
                     VStack(alignment: .leading, spacing: 13) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Places to stay").font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
-                            Text("Choose a hotel to preview a mock reservation.").font(.system(size: 12)).foregroundStyle(.secondary)
+                            Text(trip.days > 1 ? "Choose where you’d like to stay." : "Overnight stays need a trip of at least two days.")
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                         ForEach(DemoHotel.bangkok) { hotel in
-                            HotelCard(hotel: hotel, isCurrent: travelStore.currentTripBooking?.hotelID == hotel.id) {
+                            HotelCard(hotel: hotel, isCurrent: travelStore.currentTripBooking?.hotelID == hotel.id,
+                                      isEnabled: trip.days > 1) {
                                 selectedHotel = hotel
                             }
                         }
@@ -679,39 +641,44 @@ struct BookingView: View {
                     VStack(spacing: 13) {
                         Image(systemName: "bed.double.fill").font(.system(size: 30)).foregroundStyle(Color.utopiaBlue)
                         Text("A stay starts with a trip").font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
-                        Text("Create a Bangkok trip first, then save a demo hotel booking to it.").font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        Text("Create a Bangkok trip before choosing a place to stay.").font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         Button(action: onCreateTrip) {
                             Text("Create New Trip").font(.system(size: 14, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
                         }
                         .buttonStyle(.glassProminent).tint(Color.utopiaBlue)
                     }.frame(maxWidth: .infinity).padding(28).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 22))
                 }
-                Text("Demo only · No payment or real reservation will be made.")
-                    .font(.system(size: 11)).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 4)
             }
             .padding(.horizontal, 20).padding(.top, 15).padding(.bottom, 28)
         }
         .background(Color.utopiaCanvas.ignoresSafeArea())
         .sheet(item: $selectedHotel) { hotel in
             HotelBookingSheet(hotel: hotel, trip: travelStore.currentTrip) { guests in
-                if travelStore.confirmDemoBooking(hotel: hotel, guests: guests) != nil {
+                if travelStore.confirmHotelBooking(hotel: hotel, guests: guests) != nil {
                     selectedHotel = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showConfirmation = true }
                 }
             }
             .presentationDetents([.medium, .large]).presentationDragIndicator(.visible).presentationCornerRadius(28)
         }
-        .alert("Demo booking saved", isPresented: $showConfirmation) {
+        .alert("Booking saved", isPresented: $showConfirmation) {
             Button("Done", role: .cancel) { }
         } message: {
-            Text("This hotel has been added to your current Bangkok trip. No real reservation was made.")
+            Text("This hotel has been added to your current trip plan.")
         }
+    }
+
+    private func tripDateDescription(_ trip: TravelTrip) -> String {
+        guard let start = trip.startDate else { return "Bangkok" }
+        if let end = trip.endDate { return "\(start.formatted(date: .abbreviated, time: .omitted)) – \(end.formatted(date: .abbreviated, time: .omitted))" }
+        return start.formatted(date: .abbreviated, time: .omitted)
     }
 }
 
 private struct HotelCard: View {
     let hotel: DemoHotel
     let isCurrent: Bool
+    var isEnabled = true
     let action: () -> Void
     var body: some View {
         Button(action: action) {
@@ -733,7 +700,7 @@ private struct HotelCard: View {
             }
             .padding(11).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 19))
             .overlay(RoundedRectangle(cornerRadius: 19).stroke(Color.utopiaSoftGray.opacity(0.8), lineWidth: 1))
-        }.buttonStyle(.plain)
+        }.buttonStyle(.plain).disabled(!isEnabled).opacity(isEnabled ? 1 : 0.48)
     }
 }
 
@@ -743,7 +710,7 @@ private struct HotelBookingSheet: View {
     let onConfirm: (Int) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var guests = 2
-    private var nights: Int { trip?.days ?? 1 }
+    private var nights: Int { max((trip?.days ?? 2) - 1, 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -756,7 +723,7 @@ private struct HotelBookingSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("\(nights) nights").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-                    Text("\(ExchangeRateService.format(hotel.pricePerNight * Double(nights), currencyCode: "THB", decimals: 0)) total · demo")
+                    Text("\(ExchangeRateService.format(hotel.pricePerNight * Double(nights), currencyCode: "THB", decimals: 0)) total")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -767,11 +734,9 @@ private struct HotelBookingSheet: View {
                 }.buttonStyle(.plain)
             }.padding(14).background(Color.utopiaCanvas, in: RoundedRectangle(cornerRadius: 15))
             Button { onConfirm(guests); dismiss() } label: {
-                Text("Save demo booking").font(.system(size: 15, weight: .semibold))
+                Text("Confirm booking").font(.system(size: 15, weight: .semibold))
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
             }.buttonStyle(.glassProminent).tint(Color.utopiaBlue)
-            Text("This is a local demo only. No hotel is contacted and no payment is taken.")
-                .font(.system(size: 11)).foregroundStyle(.secondary).frame(maxWidth: .infinity).multilineTextAlignment(.center)
         }
         .padding(20).background(Color.utopiaCanvas.ignoresSafeArea())
     }
@@ -796,7 +761,7 @@ struct RecommendationsView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
-                TravelHeader(eyebrow: "Explore around you", title: "Recommend", scale: viewModel.fontScale,
+                TravelHeader(title: "Recommend", scale: viewModel.fontScale,
                              isBoldText: viewModel.isBoldText, onSettings: onSettings)
                 HStack(spacing: 7) {
                     Image(systemName: "location.fill").font(.system(size: 10)).foregroundStyle(Color.utopiaBlue)
@@ -928,7 +893,9 @@ private struct PlaceDetailSheet: View {
 
 private struct TripDetailSheet: View {
     let trip: TravelTrip
+    let booking: DemoHotelBooking?
     var fontScale: CGFloat = 1
+    let onBookHotel: () -> Void
     @State private var selectedDay: Int?
 
     private var itinerary: [TravelPlace] {
@@ -958,10 +925,6 @@ private struct TripDetailSheet: View {
                             Text("\(trip.days) days · \(trip.days * 3) spots")
                                 .font(.system(size: 13 * fontScale, weight: .medium)).foregroundStyle(.secondary)
                             Text(tripDateSummary).font(.system(size: 11 * fontScale)).foregroundStyle(Color.utopiaBlue)
-                            HStack(spacing: 6) {
-                                detailTag(trip.budget.title, symbol: "bahtsign.circle")
-                                ForEach(trip.preferences.prefix(1)) { preference in detailTag(preference.title, symbol: preference.symbol) }
-                            }
                         }
                         Spacer(minLength: 0)
                     }
@@ -977,6 +940,7 @@ private struct TripDetailSheet: View {
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
                         VStack(alignment: .leading, spacing: 12) {
+                            hotelOverview
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text("Your days").font(.system(size: 19 * fontScale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
@@ -993,8 +957,8 @@ private struct TripDetailSheet: View {
                             }
                         }
                     }
-                    Text("Times and distances are demo estimates. Apple Maps provides live route guidance.")
-                        .font(.system(size: 11 * fontScale)).foregroundStyle(.secondary)
+                    Text("Times and distances are approximate.")
+                        .font(.system(size: 11 * fontScale)).foregroundStyle(.tertiary)
                 }.padding(18)
             }
             .background(Color.utopiaCanvas.ignoresSafeArea())
@@ -1007,6 +971,42 @@ private struct TripDetailSheet: View {
             }
             .animation(.snappy(duration: 0.24), value: selectedDay)
         }
+    }
+
+    private var hotelOverview: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Label("Hotel", systemImage: "bed.double.fill")
+                .font(.system(size: 16 * fontScale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+            if let booking {
+                HStack(spacing: 11) {
+                    TravelImage(url: DemoHotel.bangkok.first(where: { $0.id == booking.hotelID })?.imageURL ?? "",
+                                symbol: "bed.double.fill")
+                        .frame(width: 68, height: 62).clipShape(RoundedRectangle(cornerRadius: 13))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(booking.hotelName).font(.system(size: 14 * fontScale, weight: .semibold)).foregroundStyle(Color.utopiaInk)
+                        Text("\(booking.nights) night\(booking.nights == 1 ? "" : "s") · \(booking.guests) guests")
+                            .font(.system(size: 11 * fontScale)).foregroundStyle(.secondary)
+                        Text(ExchangeRateService.format(booking.totalPrice, currencyCode: booking.currencyCode, decimals: 0))
+                            .font(.system(size: 11 * fontScale, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
+                    }
+                    Spacer(minLength: 0)
+                }
+            } else if trip.days == 1 {
+                Text("No overnight stay for a one-day trip.")
+                    .font(.system(size: 12 * fontScale)).foregroundStyle(.secondary)
+            } else {
+                Text("No hotel added yet.").font(.system(size: 12 * fontScale)).foregroundStyle(.secondary)
+            }
+            Button(action: onBookHotel) {
+                Label(booking == nil ? "Book hotel" : "Change hotel", systemImage: "bed.double")
+                    .font(.system(size: 13 * fontScale, weight: .semibold))
+                    .frame(maxWidth: .infinity).padding(.vertical, 11)
+            }
+            .buttonStyle(.glassProminent).tint(Color.utopiaBlue)
+            .disabled(trip.days == 1)
+            .opacity(trip.days == 1 ? 0.5 : 1)
+        }
+        .padding(14).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 18))
     }
 
     private var tripDateSummary: String {
@@ -1088,10 +1088,6 @@ private struct TripDetailSheet: View {
         }
     }
 
-    private func detailTag(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol).font(.system(size: 10 * fontScale, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-            .padding(.horizontal, 9).padding(.vertical, 7).background(Color.utopiaCanvas, in: Capsule())
-    }
 }
 
 private struct DayOverviewCard: View {
@@ -1376,7 +1372,7 @@ struct MoneyDashboardView: View {
     @State private var isHistoryPresented = false
 
     private var tripHistory: [ScanHistoryItem] {
-        guard let tripID = travelStore.currentTrip?.id else { return [] }
+        guard let tripID = travelStore.currentTrip?.id else { return viewModel.historyItems }
         return viewModel.historyItems.filter { $0.tripID == tripID }
     }
     private var spent: Double { travelStore.spentAmount(for: travelStore.currentTrip, history: viewModel.historyItems) }
@@ -1389,7 +1385,7 @@ struct MoneyDashboardView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
-                TravelHeader(eyebrow: "Your travel wallet", title: "Money", scale: viewModel.fontScale,
+                TravelHeader(title: "Money", scale: viewModel.fontScale,
                              isBoldText: viewModel.isBoldText, onSettings: onSettings)
                 VStack(alignment: .leading, spacing: 15) {
                     HStack {

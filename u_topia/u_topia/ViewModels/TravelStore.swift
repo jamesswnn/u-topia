@@ -68,10 +68,10 @@ public final class TravelStore: ObservableObject {
     }
 
     @discardableResult
-    public func confirmDemoBooking(hotel: DemoHotel, guests: Int) -> DemoHotelBooking? {
-        guard let trip = currentTrip else { return nil }
+    public func confirmHotelBooking(hotel: DemoHotel, guests: Int) -> DemoHotelBooking? {
+        guard let trip = currentTrip, trip.days > 1 else { return nil }
         let booking = DemoHotelBooking(tripID: trip.id, hotelID: hotel.id, hotelName: hotel.name,
-                                       area: hotel.area, nights: trip.days, guests: guests,
+                                       area: hotel.area, nights: trip.days - 1, guests: guests,
                                        pricePerNight: hotel.pricePerNight, currencyCode: trip.currencyCode)
         bookings.removeAll { $0.tripID == trip.id }
         bookings.insert(booking, at: 0)
