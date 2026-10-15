@@ -16,6 +16,18 @@ public final class TravelStore: ObservableObject {
         trips = Self.load([TravelTrip].self, key: "uTopia.trips") ?? []
         bookings = Self.load([DemoHotelBooking].self, key: "uTopia.hotelBookings") ?? []
         selectedTripID = Self.load(UUID.self, key: "uTopia.selectedTrip")
+        var correctedBookings = false
+        bookings = bookings.map { booking in
+            guard let trip = trips.first(where: { $0.id == booking.tripID }) else { return booking }
+            let allowedNights = trip.maximumHotelNights
+            guard booking.nights > allowedNights else { return booking }
+            correctedBookings = true
+            return DemoHotelBooking(id: booking.id, tripID: booking.tripID, hotelID: booking.hotelID,
+                                    hotelName: booking.hotelName, area: booking.area, nights: allowedNights,
+                                    guests: booking.guests, pricePerNight: booking.pricePerNight,
+                                    currencyCode: booking.currencyCode, bookedAt: booking.bookedAt)
+        }
+        if correctedBookings { Self.save(bookings, key: "uTopia.hotelBookings") }
         if let selectedTripID, !trips.contains(where: { $0.id == selectedTripID }) {
             self.selectedTripID = trips.first?.id
         }
@@ -68,10 +80,11 @@ public final class TravelStore: ObservableObject {
     }
 
     @discardableResult
-    public func confirmHotelBooking(hotel: DemoHotel, guests: Int) -> DemoHotelBooking? {
-        guard let trip = currentTrip, trip.days > 1 else { return nil }
+    public func confirmHotelBooking(hotel: DemoHotel, nights: Int) -> DemoHotelBooking? {
+        guard let trip = currentTrip, trip.maximumHotelNights > 0 else { return nil }
+        let bookedNights = min(max(nights, 1), trip.maximumHotelNights)
         let booking = DemoHotelBooking(tripID: trip.id, hotelID: hotel.id, hotelName: hotel.name,
-                                       area: hotel.area, nights: trip.days - 1, guests: guests,
+                                       area: hotel.area, nights: bookedNights, guests: 1,
                                        pricePerNight: hotel.pricePerNight, currencyCode: trip.currencyCode)
         bookings.removeAll { $0.tripID == trip.id }
         bookings.insert(booking, at: 0)

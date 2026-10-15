@@ -65,6 +65,8 @@ public struct TravelTrip: Identifiable, Codable, Equatable {
     public let startDate: Date?
     public let endDate: Date?
 
+    public var maximumHotelNights: Int { max(days - 1, 0) }
+
     public init(id: UUID = UUID(), city: String = "Bangkok", countryCode: String = "TH", days: Int,
                 budget: TripBudget, preferences: [TripPreference], createdAt: Date = Date(), currencyCode: String = "THB",
                 startDate: Date? = nil, endDate: Date? = nil) {

@@ -379,7 +379,6 @@ private enum TripComposerStep: Int, CaseIterable {
 struct TripHomeView: View {
     @ObservedObject var travelStore: TravelStore
     @ObservedObject var viewModel: ScannerViewModel
-    let onCreateTrip: () -> Void
     let onOpenBooking: () -> Void
     let onSettings: () -> Void
     @State private var activeSheet: TripHomeSheet?
@@ -441,7 +440,7 @@ struct TripHomeView: View {
                             }
                         }
                     }
-                    Button(action: onCreateTrip) {
+                    Button { activeSheet = .createTrip } label: {
                         Label("Create New Trip", systemImage: "plus")
                             .font(.system(size: 16 * viewModel.fontScale, weight: .semibold, design: .rounded))
                             .foregroundStyle(Color.utopiaBlue).frame(maxWidth: .infinity).frame(height: 70)
@@ -468,6 +467,11 @@ struct TripHomeView: View {
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .place(let place): PlaceDetailSheet(place: place)
+            case .createTrip:
+                NavigationStack {
+                    CreateTripView(travelStore: travelStore) { activeSheet = nil }
+                }
+                .presentationDetents([.large]).presentationDragIndicator(.visible).presentationCornerRadius(30)
             case .trip(let trip): TripDetailSheet(trip: trip,
                                                   booking: travelStore.bookings.first { $0.tripID == trip.id },
                                                   fontScale: viewModel.fontScale,
@@ -490,11 +494,13 @@ struct TripHomeView: View {
 
 private enum TripHomeSheet: Identifiable {
     case place(TravelPlace)
+    case createTrip
     case trip(TravelTrip)
     case delete(TravelTrip)
     var id: String {
         switch self {
         case .place(let place): "place-\(place.id)"
+        case .createTrip: "create-trip"
         case .trip(let trip): "trip-\(trip.id.uuidString)"
         case .delete(let trip): "delete-\(trip.id.uuidString)"
         }
@@ -606,7 +612,7 @@ struct BookingView: View {
                         Image(systemName: "suitcase.rolling.fill").foregroundStyle(Color.utopiaBlue)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("For your Bangkok trip").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-                            Text("\(max(trip.days - 1, 0)) night\(trip.days == 2 ? "" : "s") · \(tripDateDescription(trip))")
+                            Text("\(trip.maximumHotelNights) night\(trip.maximumHotelNights == 1 ? "" : "s") · \(tripDateDescription(trip))")
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -617,7 +623,7 @@ struct BookingView: View {
                             Label("BOOKING SAVED", systemImage: "checkmark.seal.fill")
                                 .font(.system(size: 10, weight: .bold)).tracking(0.6).foregroundStyle(Color.utopiaSuccess)
                             Text(booking.hotelName).font(.system(size: 16, weight: .bold)).foregroundStyle(Color.utopiaInk)
-                            Text("\(booking.nights) nights · \(booking.guests) guests · \(ExchangeRateService.format(booking.totalPrice, currencyCode: booking.currencyCode, decimals: 0))")
+                            Text("\(min(booking.nights, trip.maximumHotelNights)) night\(min(booking.nights, trip.maximumHotelNights) == 1 ? "" : "s") · \(ExchangeRateService.format(booking.pricePerNight * Double(min(booking.nights, trip.maximumHotelNights)), currencyCode: booking.currencyCode, decimals: 0)) total")
                                 .font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
@@ -653,8 +659,8 @@ struct BookingView: View {
         }
         .background(Color.utopiaCanvas.ignoresSafeArea())
         .sheet(item: $selectedHotel) { hotel in
-            HotelBookingSheet(hotel: hotel, trip: travelStore.currentTrip) { guests in
-                if travelStore.confirmHotelBooking(hotel: hotel, guests: guests) != nil {
+            HotelBookingSheet(hotel: hotel, trip: travelStore.currentTrip) { nights in
+                if travelStore.confirmHotelBooking(hotel: hotel, nights: nights) != nil {
                     selectedHotel = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showConfirmation = true }
                 }
@@ -709,8 +715,8 @@ private struct HotelBookingSheet: View {
     let trip: TravelTrip?
     let onConfirm: (Int) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var guests = 2
-    private var nights: Int { max((trip?.days ?? 2) - 1, 1) }
+    @State private var nights = 1
+    private var maximumNights: Int { trip?.maximumHotelNights ?? 0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -720,25 +726,36 @@ private struct HotelBookingSheet: View {
                 Text(hotel.area).font(.system(size: 13)).foregroundStyle(.secondary)
                 Text(hotel.description).font(.system(size: 13)).foregroundStyle(.secondary).padding(.top, 2)
             }
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(nights) nights").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-                    Text("\(ExchangeRateService.format(hotel.pricePerNight * Double(nights), currencyCode: "THB", decimals: 0)) total")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                }
-                Spacer()
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Choose nights · up to \(maximumNights)")
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.utopiaInk)
                 HStack(spacing: 14) {
-                    Button { guests = max(1, guests - 1) } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Color.utopiaBlue).font(.system(size: 23)) }
-                    Text("\(guests)").font(.system(size: 15, weight: .semibold)).monospacedDigit()
-                    Button { guests = min(8, guests + 1) } label: { Image(systemName: "plus.circle.fill").foregroundStyle(Color.utopiaBlue).font(.system(size: 23)) }
+                    Button { nights = max(1, nights - 1) } label: {
+                        Image(systemName: "minus.circle.fill").foregroundStyle(Color.utopiaBlue).font(.system(size: 25))
+                    }.disabled(nights <= 1)
+                    Text("\(nights) night\(nights == 1 ? "" : "s")")
+                        .font(.system(size: 15, weight: .semibold)).monospacedDigit()
+                        .contentTransition(.numericText())
+                    Button { nights = min(maximumNights, nights + 1) } label: {
+                        Image(systemName: "plus.circle.fill").foregroundStyle(Color.utopiaBlue).font(.system(size: 25))
+                    }.disabled(nights >= maximumNights)
+                    Spacer()
                 }.buttonStyle(.plain)
+                Divider()
+                HStack {
+                    Text("Total").font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(ExchangeRateService.format(hotel.pricePerNight * Double(nights), currencyCode: "THB", decimals: 0))
+                        .font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+                }
             }.padding(14).background(Color.utopiaCanvas, in: RoundedRectangle(cornerRadius: 15))
-            Button { onConfirm(guests); dismiss() } label: {
+            Button { onConfirm(nights); dismiss() } label: {
                 Text("Confirm booking").font(.system(size: 15, weight: .semibold))
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
-            }.buttonStyle(.glassProminent).tint(Color.utopiaBlue)
+            }.buttonStyle(.glassProminent).tint(Color.utopiaBlue).disabled(maximumNights == 0)
         }
         .padding(20).background(Color.utopiaCanvas.ignoresSafeArea())
+        .onAppear { nights = max(1, maximumNights) }
     }
 }
 
@@ -747,9 +764,11 @@ struct RecommendationsView: View {
     let onSettings: () -> Void
     @State private var selectedFilter: String = "All"
     @State private var selectedPlace: TravelPlace?
+    @State private var isAroundPresented = true
+    @State private var aroundDetent: PresentationDetent = .medium
     @State private var cameraPosition = MapCameraPosition.region(
         MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 13.7563, longitude: 100.5018),
-                          span: MKCoordinateSpan(latitudeDelta: 0.09, longitudeDelta: 0.09))
+                          span: MKCoordinateSpan(latitudeDelta: 0.045, longitudeDelta: 0.045))
     )
 
     private let filters = ["All", "Hotels", "Food", "Things to do"]
@@ -759,13 +778,37 @@ struct RecommendationsView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                TravelHeader(title: "Recommend", scale: viewModel.fontScale,
-                             isBoldText: viewModel.isBoldText, onSettings: onSettings)
-                HStack(spacing: 7) {
-                    Image(systemName: "location.fill").font(.system(size: 10)).foregroundStyle(Color.utopiaBlue)
-                    Text("Bangkok, TH · Demo area").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+        ZStack(alignment: .top) {
+            Map(position: $cameraPosition) {
+                ForEach(places) { place in
+                    Annotation(place.name, coordinate: place.coordinate, anchor: .center) {
+                        Button { selectedPlace = place } label: {
+                            Image(systemName: place.category.symbol).font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Color.utopiaInk).frame(width: 34, height: 34)
+                                .background(place.category.tint, in: Circle()).overlay(Circle().stroke(.white, lineWidth: 2))
+                                .shadow(color: .black.opacity(0.18), radius: 5, y: 3)
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+            .mapStyle(.standard(elevation: .realistic))
+            .mapControls { MapCompass(); MapScaleView() }
+            .ignoresSafeArea()
+
+            VStack(spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Label("Bangkok, Thailand", systemImage: "location.fill")
+                            .font(.system(size: 18 * viewModel.fontScale, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.utopiaInk)
+                        Text("Explore nearby places").font(.system(size: 11 * viewModel.fontScale)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button(action: onSettings) {
+                        Image(systemName: "textformat.size").font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.utopiaInk).frame(width: 42, height: 42)
+                            .glassEffect(.regular.interactive(), in: Circle())
+                    }.buttonStyle(ScaleButtonStyle()).accessibilityLabel("Text settings")
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -773,46 +816,70 @@ struct RecommendationsView: View {
                             Button { selectedFilter = filter } label: {
                                 Text(filter).font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(selectedFilter == filter ? .white : Color.utopiaInk)
-                                    .padding(.horizontal, 15).padding(.vertical, 9)
-                .background(selectedFilter == filter ? Color.utopiaInk : Color.utopiaCard, in: Capsule())
-                                    .overlay(Capsule().stroke(selectedFilter == filter ? Color.clear : Color.utopiaSoftGray, lineWidth: 1))
-                            }.buttonStyle(.plain)
+                                    .padding(.horizontal, 14).padding(.vertical, 9)
+                                    .background(selectedFilter == filter ? Color.utopiaInk : Color.utopiaCard.opacity(0.94), in: Capsule())
+                            }.buttonStyle(ScaleButtonStyle())
                         }
                     }
                 }
-                Map(position: $cameraPosition) {
-                    ForEach(places) { place in
-                        Annotation(place.name, coordinate: place.coordinate, anchor: .center) {
-                            Button { selectedPlace = place } label: {
-                                Image(systemName: place.category.symbol).font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(Color.utopiaInk).frame(width: 32, height: 32)
-                                    .background(place.category.tint, in: Circle()).overlay(Circle().stroke(.white, lineWidth: 2))
-                                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
-                            }.buttonStyle(.plain)
-                        }
-                    }
-                }
-                .frame(height: 235).clipShape(RoundedRectangle(cornerRadius: 22))
-                .overlay(alignment: .bottomTrailing) {
-                    Label("MapKit", systemImage: "map.fill").font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color.utopiaInk).padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(.regularMaterial, in: Capsule()).padding(10)
-                }
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Around Bangkok").font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
-                        Text("Route times are demo estimates").font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text("\(places.count) places").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                }.padding(.top, 2)
-                ForEach(places) { place in
-                    Button { selectedPlace = place } label: { NearbyPlaceRow(place: place) }.buttonStyle(.plain)
+                Spacer()
+                if !isAroundPresented {
+                    Button { isAroundPresented = true } label: {
+                        Label("Around Bangkok · \(places.count) places", systemImage: "line.3.horizontal.decrease")
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.utopiaInk)
+                            .padding(.horizontal, 17).padding(.vertical, 12).background(.regularMaterial, in: Capsule())
+                    }.buttonStyle(ScaleButtonStyle()).padding(.bottom, 96)
                 }
             }
-            .padding(.horizontal, 18).padding(.top, 15).padding(.bottom, 28)
+            .padding(.horizontal, 18).padding(.top, 12)
         }
-        .background(Color.utopiaCanvas.ignoresSafeArea())
+        .sheet(isPresented: $isAroundPresented) {
+            AroundBangkokSheet(places: places, selectedFilter: $selectedFilter, selectedPlace: $selectedPlace,
+                               fontScale: viewModel.fontScale)
+                .presentationDetents([.medium, .large], selection: $aroundDetent)
+                .presentationDragIndicator(.visible).presentationCornerRadius(28)
+        }
+    }
+}
+
+private struct AroundBangkokSheet: View {
+    let places: [TravelPlace]
+    @Binding var selectedFilter: String
+    @Binding var selectedPlace: TravelPlace?
+    var fontScale: CGFloat = 1
+    private let filters = ["All", "Hotels", "Food", "Things to do"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Around Bangkok").font(.system(size: 21 * fontScale, weight: .bold, design: .rounded)).foregroundStyle(Color.utopiaInk)
+                    Text("\(places.count) nearby places").font(.system(size: 12 * fontScale)).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }.padding(.top, 8)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(filters, id: \.self) { filter in
+                        Button { selectedFilter = filter } label: {
+                            Text(filter).font(.system(size: 12 * fontScale, weight: .semibold))
+                                .foregroundStyle(selectedFilter == filter ? .white : Color.utopiaInk)
+                                .padding(.horizontal, 14).padding(.vertical, 8)
+                                .background(selectedFilter == filter ? Color.utopiaInk : Color.utopiaSoftGray.opacity(0.5), in: Capsule())
+                        }.buttonStyle(ScaleButtonStyle())
+                    }
+                }
+            }
+            ScrollView(showsIndicators: false) {
+                LazyVStack(spacing: 9) {
+                    ForEach(places) { place in
+                        Button { selectedPlace = place } label: { NearbyPlaceRow(place: place) }
+                            .buttonStyle(ScaleButtonStyle())
+                    }
+                }.padding(.bottom, 22)
+            }
+        }
+        .padding(.horizontal, 18).background(Color.utopiaCanvas.ignoresSafeArea())
         .sheet(item: $selectedPlace) { PlaceDetailSheet(place: $0) }
     }
 }
@@ -871,11 +938,17 @@ private struct PlaceDetailSheet: View {
                     transportPill("Train", minutes: place.trainMinutes, symbol: "tram.fill")
                     transportPill("Drive", minutes: place.drivingMinutes, symbol: "car.fill")
                 }
+                Button(action: startNavigation) {
+                    Label("Start navigation", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(maxWidth: .infinity).padding(.vertical, 13)
+                }
+                .buttonStyle(.glassProminent).tint(Color.utopiaBlue)
                 Map(position: $cameraPosition) {
                     Marker(place.name, coordinate: place.coordinate).tint(Color.utopiaBlue)
                 }
                 .frame(height: 175).clipShape(RoundedRectangle(cornerRadius: 18))
-                Text("Map and travel times are for the Bangkok demo area.").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("Travel times are approximate.").font(.system(size: 11)).foregroundStyle(.secondary)
             }.padding(20)
         }
         .background(Color.utopiaCanvas.ignoresSafeArea())
@@ -888,6 +961,13 @@ private struct PlaceDetailSheet: View {
             Text("\(minutes) min").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.utopiaInk)
             Text(title).font(.system(size: 9)).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity).padding(.vertical, 10).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 13))
+    }
+
+    private func startNavigation() {
+        let destination = MKMapItem(location: CLLocation(latitude: place.latitude, longitude: place.longitude), address: nil)
+        destination.name = place.name
+        MKMapItem.openMaps(with: [.forCurrentLocation(), destination],
+                           launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
     }
 }
 
@@ -984,7 +1064,7 @@ private struct TripDetailSheet: View {
                         .frame(width: 68, height: 62).clipShape(RoundedRectangle(cornerRadius: 13))
                     VStack(alignment: .leading, spacing: 4) {
                         Text(booking.hotelName).font(.system(size: 14 * fontScale, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-                        Text("\(booking.nights) night\(booking.nights == 1 ? "" : "s") · \(booking.guests) guests")
+                    Text("\(min(booking.nights, trip.maximumHotelNights)) night\(min(booking.nights, trip.maximumHotelNights) == 1 ? "" : "s")")
                             .font(.system(size: 11 * fontScale)).foregroundStyle(.secondary)
                         Text(ExchangeRateService.format(booking.totalPrice, currencyCode: booking.currencyCode, decimals: 0))
                             .font(.system(size: 11 * fontScale, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
@@ -1003,8 +1083,8 @@ private struct TripDetailSheet: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 11)
             }
             .buttonStyle(.glassProminent).tint(Color.utopiaBlue)
-            .disabled(trip.days == 1)
-            .opacity(trip.days == 1 ? 0.5 : 1)
+            .disabled(trip.maximumHotelNights == 0)
+            .opacity(trip.maximumHotelNights == 0 ? 0.5 : 1)
         }
         .padding(14).background(Color.utopiaCard, in: RoundedRectangle(cornerRadius: 18))
     }

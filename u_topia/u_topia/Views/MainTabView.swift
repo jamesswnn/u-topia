@@ -30,7 +30,7 @@ public struct MainTabView: View {
             switch selectedSection {
             case .trip:
                 TripHomeView(travelStore: travelStore, viewModel: viewModel,
-                             onCreateTrip: openTripComposer, onOpenBooking: openBooking, onSettings: showTextSettings)
+                             onOpenBooking: openBooking, onSettings: showTextSettings)
             case .booking:
                 BookingView(travelStore: travelStore, viewModel: viewModel,
                             onCreateTrip: openTripComposer, onSettings: showTextSettings)
@@ -303,19 +303,23 @@ private struct TextSettingsView: View {
                         }
                         HStack {
                             Text("Text size").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.utopiaInk)
-                            Spacer()
                             Text("\(Int(viewModel.textScale * 100))%")
                                 .font(.system(size: 13, weight: .bold, design: .rounded)).monospacedDigit()
                                 .foregroundStyle(Color.utopiaBlue).contentTransition(.numericText())
                                 .padding(.horizontal, 10).padding(.vertical, 6)
                                 .background(Color.utopiaBlue.opacity(0.09), in: Capsule())
-                        }
-                        if abs(viewModel.textScale - 1) > 0.001 {
-                            HStack {
-                                Spacer()
-                                Button("Reset to 100%") { viewModel.setTextScale(1) }
-                                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.utopiaBlue)
-                                    .buttonStyle(ScaleButtonStyle())
+                            Spacer()
+                            if abs(viewModel.textScale - 1) > 0.001 {
+                                HStack {
+                                    Spacer()
+                                    Button { viewModel.setTextScale(1) } label: {
+                                        Image(systemName: "arrow.counterclockwise")
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundStyle(Color.utopiaBlue)
+                                            .buttonStyle(ScaleButtonStyle())
+                                    }
+                                    .accessibilityLabel("Reset text size")
+                                }
                             }
                         }
                     }
