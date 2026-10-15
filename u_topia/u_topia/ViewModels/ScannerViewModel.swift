@@ -70,6 +70,7 @@ public final class ScannerViewModel: ObservableObject {
     @Published public var isDuplicateCartItemAlertPresented = false
     @Published public var detectedPrice = 0.0
     @Published public var detectedProductName = "Scanned item"
+    public var tripIDForNextHistory: UUID?
     @Published public var tenderedAmount = 0.0
     @Published public var detectedChange = 0.0
     @Published public var keypadInput = "0"
@@ -448,8 +449,10 @@ public final class ScannerViewModel: ObservableObject {
             paidAmount: tenderedAmount, expectedChangeAmount: expectedChange,
             receivedChangeAmount: detectedChange, priceCurrencyCode: priceCurrencyCode,
             changeCurrencyCode: priceCurrencyCode, convertedCurrencyCode: changeCurrencyCode,
-            isVerified: abs(detectedChange - expectedChange) < 0.01, products: products)
+            isVerified: abs(detectedChange - expectedChange) < 0.01, products: products,
+            tripID: tripIDForNextHistory)
         historyItems.insert(item, at: 0); persistHistory()
+        tripIDForNextHistory = nil
         if let id = currentFavoriteID, let index = favoriteItems.firstIndex(where: { $0.id == id }) {
             favoriteItems[index].tendered = tenderedAmount
             favoriteItems[index].expectedChange = expectedChange

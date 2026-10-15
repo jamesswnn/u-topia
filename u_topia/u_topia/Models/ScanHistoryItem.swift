@@ -36,12 +36,13 @@ public struct ScanHistoryItem: Identifiable, Codable {
     public let convertedCurrencyCode: String
     public let isVerified: Bool
     public let products: [HistoryProduct]
+    public let tripID: UUID?
 
     public init(id: UUID = UUID(), timestamp: Date = Date(), priceAmount: Double,
         convertedPrice: Double?, paidAmount: Double, expectedChangeAmount: Double,
         receivedChangeAmount: Double, priceCurrencyCode: String, changeCurrencyCode: String,
         convertedCurrencyCode: String,
-        isVerified: Bool, products: [HistoryProduct] = []) {
+        isVerified: Bool, products: [HistoryProduct] = [], tripID: UUID? = nil) {
         self.id = id; self.timestamp = timestamp; self.priceAmount = priceAmount
         self.convertedPrice = convertedPrice; self.paidAmount = paidAmount
         self.expectedChangeAmount = expectedChangeAmount; self.receivedChangeAmount = receivedChangeAmount
@@ -49,12 +50,13 @@ public struct ScanHistoryItem: Identifiable, Codable {
         self.convertedCurrencyCode = convertedCurrencyCode
         self.isVerified = isVerified
         self.products = products
+        self.tripID = tripID
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, timestamp, priceAmount, convertedPrice, paidAmount, expectedChangeAmount
         case receivedChangeAmount, priceCurrencyCode, changeCurrencyCode, convertedCurrencyCode
-        case isVerified, products
+        case isVerified, products, tripID
     }
 
     public init(from decoder: Decoder) throws {
@@ -71,6 +73,7 @@ public struct ScanHistoryItem: Identifiable, Codable {
         convertedCurrencyCode = try container.decode(String.self, forKey: .convertedCurrencyCode)
         isVerified = try container.decode(Bool.self, forKey: .isVerified)
         products = try container.decodeIfPresent([HistoryProduct].self, forKey: .products) ?? []
+        tripID = try container.decodeIfPresent(UUID.self, forKey: .tripID)
     }
 
     public var formattedTime: String {
